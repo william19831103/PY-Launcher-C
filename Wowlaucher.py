@@ -5,6 +5,9 @@ import sys
 import os
 import subprocess
 import requests
+from PyQt5.QtWidgets import QDialog, QLineEdit, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QRadioButton
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIntValidator
 
 class WowLauncher(QMainWindow):
     def __init__(self):
@@ -222,7 +225,7 @@ class WowLauncher(QMainWindow):
             status = "服务器状态: 正常运行\n"
             status += "在线人数: 1000\n\n"
             status += "公告：\n"
-            status += "1. 独家自制各职业专属技能升级模式\n"
+            status += "1. 独家自制��职业专属技能升级模式\n"
             status += "2. 自制五人挑战地图\n"
             status += "3. 自制BOSS乐园\n"
             status += "4. 自制飞行地图\n"
@@ -233,7 +236,52 @@ class WowLauncher(QMainWindow):
             self.info_box.setText("无法获取服务器状态")
     
     def open_register(self):
-        QDesktopServices.openUrl(QUrl("http://your-server.com/register"))
+        dialog = RegisterDialog(self)
+        # 将对话框移动到主窗口中心
+        dialog.move(self.geometry().center() - dialog.rect().center())
+        
+        if dialog.exec_() == QDialog.Accepted:
+            # 获取输入的数据
+            account = dialog.account_input.text()
+            password = dialog.password_input.text()
+            confirm_pwd = dialog.confirm_pwd_input.text()
+            security_pwd = dialog.security_pwd_input.text()
+            captcha = dialog.captcha_input.text()
+            
+            # 验证输入
+            if not self._validate_register_input(account, password, confirm_pwd, security_pwd, captcha):
+                return
+            
+            # TODO: 发送注册请求到服务器
+            try:
+                # 这里添加与服务器通信的代码
+                QMessageBox.information(self, "成功", "账号注册成功！")
+            except Exception as e:
+                QMessageBox.warning(self, "错误", f"注册失败：{str(e)}")
+    
+    def _validate_register_input(self, account, password, confirm_pwd, security_pwd, captcha):
+        """验证注册输入"""
+        if len(account) < 4 or len(account) > 12:
+            QMessageBox.warning(self, "错误", "账号长度必须在4-12位之间")
+            return False
+            
+        if len(password) < 4 or len(password) > 12:
+            QMessageBox.warning(self, "错误", "密码长度必须在4-12位之间")
+            return False
+            
+        if password != confirm_pwd:
+            QMessageBox.warning(self, "错误", "两次输入的密码不一致")
+            return False
+            
+        if len(security_pwd) < 1 or len(security_pwd) > 8:
+            QMessageBox.warning(self, "错误", "安全密码长度必须在1-8位之间")
+            return False
+            
+        if not captcha:
+            QMessageBox.warning(self, "错", "请输入验证码")
+            return False
+            
+        return True
     
     def open_shop(self):
         QDesktopServices.openUrl(QUrl("http://your-server.com/shop"))
@@ -263,6 +311,203 @@ class WowLauncher(QMainWindow):
             subprocess.Popen(wow_path)
         else:
             QMessageBox.warning(self, "错误", "未找到游戏客户端，请确认安装路径正确")
+
+class RegisterDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("当前分区")
+        self.setFixedSize(550, 550)  # 增加30%的尺寸
+        
+        # 设置窗口背景色和样式
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #1a1a1a;
+            }
+            QLabel {
+                color: #ffffff;
+                font-size: 16px;
+            }
+            QLineEdit {
+                background-color: #2a2a2a;
+                color: white;
+                border: 1px solid #3a3a3a;
+                padding: 8px;
+                margin: 2px;
+                height: 32px;
+                font-size: 16px;
+            }
+            QRadioButton {
+                color: white;
+                spacing: 10px;
+                font-size: 16px;
+            }
+            QRadioButton::indicator {
+                width: 18px;
+                height: 18px;
+            }
+            QPushButton {
+                background-color: #2a2a2a;
+                color: white;
+                border: 1px solid #3a3a3a;
+                padding: 10px 30px;
+                min-width: 120px;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #3a3a3a;
+            }
+        """)
+        
+        # 创建主布局
+        self.main_layout = QVBoxLayout()
+        self.main_layout.setSpacing(20)  # 增加垂直间距
+        self.main_layout.setContentsMargins(20, 20, 20, 20)
+        self.setLayout(self.main_layout)
+        
+        # 标题标签 - 红色背景
+        title_container = QWidget()
+        title_container.setStyleSheet("background-color: #aa0000;")
+        title_container.setFixedHeight(40)
+        title_layout = QHBoxLayout(title_container)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        
+        title_label = QLabel("[无限魔兽]")
+        title_label.setStyleSheet("color: white; font-size: 22px; font-weight: bold;")
+        title_label.setAlignment(Qt.AlignCenter)
+        title_layout.addWidget(title_label)
+        
+        self.main_layout.addWidget(title_container)
+        
+        # 提示文本
+        hint_label = QLabel("*欢迎使用账号注册服务,请务必牢记账号密码")
+        hint_label.setStyleSheet("color: #00BFFF; font-size: 20px;")
+        self.main_layout.addWidget(hint_label)
+        
+        # 创建输入框区域
+        self.account_input = self._create_input("账号名称", "4-12位数字和字母")
+        self.password_input = self._create_input("输入密码", "4-12位数字和字母")
+        self.confirm_pwd_input = self._create_input("确认密码", "两次输入的密码")
+        self.security_pwd_input = self._create_input("安全密码", "1-8位数字和字母")
+        
+        # 验证码区域
+        captcha_container = QWidget()
+        captcha_layout = QHBoxLayout(captcha_container)
+        captcha_layout.setContentsMargins(0, 0, 0, 0)
+        captcha_layout.setSpacing(15)
+
+        # 创建左侧标签
+        captcha_label = QLabel("随机验证:")
+        captcha_label.setFixedWidth(100)  # 与其他标签相同宽度
+
+        # 创建输入框
+        self.captcha_input = QLineEdit()
+        self.captcha_input.setFixedWidth(250)  # 与其他输入框相同宽度
+
+        # 创建验证码数字标签
+        captcha_number = QLabel("10023")
+        captcha_number.setStyleSheet("""
+            color: #ff0000;
+            font-size: 16px;
+        """)
+
+        # 添加到布局
+        captcha_layout.addWidget(captcha_label)
+        captcha_layout.addWidget(self.captcha_input)
+        captcha_layout.addWidget(captcha_number)
+        captcha_layout.addStretch()
+
+        self.main_layout.addWidget(captcha_container)
+
+        # 移除原来的placeholder
+        self.captcha_input.setPlaceholderText("")
+
+        # 单选按钮组
+        radio_layout = QHBoxLayout()
+        radio_layout.setSpacing(30)
+        self.register_radio = QRadioButton("账号注册")
+        self.unlock_radio = QRadioButton("角色解卡")
+        self.change_pwd_radio = QRadioButton("更改密码")
+        self.register_radio.setChecked(True)
+        radio_layout.addWidget(self.register_radio)
+        radio_layout.addWidget(self.unlock_radio)
+        radio_layout.addWidget(self.change_pwd_radio)
+        self.main_layout.addLayout(radio_layout)
+        
+        # 服务类型标签
+        service_label = QLabel("服务类型: 账号注册")
+        service_label.setStyleSheet("color: #00BFFF; font-size: 14px;")
+        self.main_layout.addWidget(service_label)
+        
+        # 添加弹性空间
+        self.main_layout.addStretch()
+        
+        # 按钮区域
+        btn_layout = QHBoxLayout()
+        self.confirm_btn = QPushButton("确定")
+        self.cancel_btn = QPushButton("取消")
+        
+        # 设置按钮样式
+        self.confirm_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #0078d7;
+                border: none;
+                color: white;
+                padding: 10px 30px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #1e88e5;
+            }
+        """)
+        
+        self.cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2a2a2a;
+                border: 1px solid #3a3a3a;
+                color: white;
+                padding: 10px 30px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #3a3a3a;
+            }
+        """)
+        
+        btn_layout.addWidget(self.confirm_btn)
+        btn_layout.addWidget(self.cancel_btn)
+        btn_layout.setSpacing(20)
+        self.main_layout.addLayout(btn_layout)
+        
+        # 连接按钮信号
+        self.confirm_btn.clicked.connect(self.accept)
+        self.cancel_btn.clicked.connect(self.reject)
+        
+    def _create_input(self, label_text, placeholder_text):
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(15)
+        
+        # 创建左侧标签
+        label = QLabel(f"{label_text}:")
+        label.setFixedWidth(100)
+        
+        # 创建输入框
+        input_field = QLineEdit()
+        input_field.setFixedWidth(250)
+        
+        # 创建右侧提示文本
+        hint = QLabel(placeholder_text)
+        hint.setStyleSheet("color: #666666; font-size: 14px;")
+        
+        # 添加到布局
+        layout.addWidget(label)
+        layout.addWidget(input_field)
+        layout.addWidget(hint)
+        layout.addStretch()
+        
+        self.main_layout.addWidget(container)
+        return input_field
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
