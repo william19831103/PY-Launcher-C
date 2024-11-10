@@ -8,6 +8,10 @@ import requests
 from PyQt5.QtWidgets import QDialog, QLineEdit, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QRadioButton
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator
+from network_opcodes import Opcodes
+import json
+import aiohttp
+import asyncio
 
 class WowLauncher(QMainWindow):
     def __init__(self):
@@ -215,24 +219,77 @@ class WowLauncher(QMainWindow):
         # 初始化服务器状态
         self.update_server_status()
 
-    def update_server_status(self):
+    async def send_request(self, opcode, data=None):
+        """发送网络请求的通用方法"""
         try:
-            # 这里替换为实际的服务器API
-            # response = requests.get("http://your-server.com/api/status")
-            # data = response.json()
-            
-            # 模拟数据
-            status = "服务器状态: 正常运行\n"
-            status += "在线人数: 1000\n\n"
-            status += "公告：\n"
-            status += "1. 独家自制��职业专属技能升级模式\n"
-            status += "2. 自制五人挑战地图\n"
-            status += "3. 自制BOSS乐园\n"
-            status += "4. 自制飞行地图\n"
-            status += "5. 收藏宇宙合成神龙触发特殊事件"
-            
-            self.info_box.setText(status)
-        except:
+            async with aiohttp.ClientSession() as session:
+                url = f"http://your-server.com/api"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Opcode": str(opcode)
+                }
+                
+                async with session.post(url, json=data, headers=headers) as response:
+                    return await response.json()
+        except Exception as e:
+            QMessageBox.warning(self, "错误", f"网络请求失败: {str(e)}")
+            return None
+
+    def register_account(self, account, password, security_pwd):
+        """注册账号"""
+        data = {
+            "account": account,
+            "password": password,
+            "security_password": security_pwd
+        }
+        
+        response = asyncio.run(self.send_request(Opcodes.REGISTER_ACCOUNT, data))
+        return response
+        
+    def change_password(self, account, old_password, new_password):
+        """修改密码"""
+        data = {
+            "account": account,
+            "old_password": old_password,
+            "new_password": new_password
+        }
+        
+        response = asyncio.run(self.send_request(Opcodes.CHANGE_PASSWORD, data))
+        return response
+        
+    def unlock_character(self, account, character_name):
+        """角色解卡"""
+        data = {
+            "account": account,
+            "character_name": character_name
+        }
+        
+        response = asyncio.run(self.send_request(Opcodes.UNLOCK_CHARACTER, data))
+        return response
+        
+    def check_client_update(self):
+        """检查客户端更新"""
+        response = asyncio.run(self.send_request(Opcodes.CHECK_VERSION))
+        if response and response.get("needs_update"):
+            patch_list = response.get("patch_list", [])
+            return patch_list
+        return None
+
+    def update_server_status(self):
+        """更新服务器状态"""
+        try:
+            response = asyncio.run(self.send_request(Opcodes.SERVER_STATUS))
+            if response:
+                status = f"服务器状态: {response.get('status', '未知')}\n"
+                status += f"在线人数: {response.get('online_count', 0)}\n\n"
+                status += "公告：\n"
+                
+                announcements = response.get('announcements', [])
+                for i, announcement in enumerate(announcements, 1):
+                    status += f"{i}. {announcement}\n"
+                    
+                self.info_box.setText(status)
+        except Exception as e:
             self.info_box.setText("无法获取服务器状态")
     
     def open_register(self):
@@ -508,6 +565,19 @@ class RegisterDialog(QDialog):
         
         self.main_layout.addWidget(container)
         return input_field
+
+    def accept(self):
+        account = self.account_input.text()
+        password = self.password_input.text()
+        security_pwd = self.security_pwd_input.text()
+        
+        if self.register_radio.isChecked():
+            response = self.parent().register_account(account, password, security_pwd)
+            if response and response.get("success"):
+                QMessageBox.information(self, "成功", "账号注册成功！")
+                self.accept()
+            else:
+                QMessageBox.warning(self, "错误", response.get("message", "注册失败"))
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
