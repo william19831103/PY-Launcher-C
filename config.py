@@ -8,13 +8,11 @@ DEFAULT_CONFIG = {
         "port": 8080,
         "debug": True,
     },
-    "login": {
-        "port": "8080",
-        "title": "无限魔兽",
-    },
-    "wow": {
+    "serverinfo": {
         "ip": "127.0.0.1",
         "port": "3724",
+        "title": "无限魔兽",
+        "online_count": 0
     },
     "soap": {
         "ip": "127.0.0.1",

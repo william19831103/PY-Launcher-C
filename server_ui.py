@@ -14,6 +14,12 @@ from datetime import datetime
 from config import SERVER_CONFIG, save_config, load_config
 from network_opcodes import Opcodes
 import os
+import base64
+import http.client
+import xml.etree.ElementTree as ET
+
+
+
 
 # 将FastAPI应用命名为api_app而不是app
 api_app = FastAPI(title="无限魔兽服务器")
@@ -202,9 +208,9 @@ async def get_server_info():
 
         # 构建服务器信息
         server_info = ServerInfo(
-            wow_ip=SERVER_CONFIG["wow"]["ip"],
-            wow_port=SERVER_CONFIG["wow"]["port"],
-            login_title=SERVER_CONFIG["login"]["title"],
+            wow_ip=SERVER_CONFIG["serverinfo"]["ip"],
+            wow_port=SERVER_CONFIG["serverinfo"]["port"],
+            login_title=SERVER_CONFIG["serverinfo"]["title"],
             announcements=announcements
         )
         
@@ -264,7 +270,7 @@ class ServerUI(QMainWindow):
             }
         """)
 
-        # 创建中央部件
+        # 创建央部件
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
@@ -428,10 +434,10 @@ class ServerUI(QMainWindow):
         config = load_config()
         
         # 设置UI控件的值
-        self.login_port.setText(str(config["login"]["port"]))
-        self.wow_ip.setText(config["wow"]["ip"])
-        self.wow_port.setText(str(config["wow"]["port"]))
-        self.server_title.setText(config["login"]["title"])
+        self.login_port.setText(str(config["server"]["port"]))
+        self.wow_ip.setText(config["serverinfo"]["ip"])
+        self.wow_port.setText(str(config["serverinfo"]["port"]))
+        self.server_title.setText(config["serverinfo"]["title"])
         self.soap_ip.setText(config["soap"]["ip"])
         self.soap_port.setText(str(config["soap"]["port"]))
         self.soap_user.setText(config["soap"]["username"])
@@ -447,13 +453,11 @@ class ServerUI(QMainWindow):
                 "port": int(self.login_port.text()),
                 "debug": True
             },
-            "login": {
-                "port": self.login_port.text(),
-                "title": self.server_title.text()
-            },
-            "wow": {
+            "serverinfo": {
                 "ip": self.wow_ip.text(),
-                "port": self.wow_port.text()
+                "port": self.wow_port.text(),
+                "title": self.server_title.text(),
+                "online_count": 0  # 这个值会在运行时动态更新
             },
             "soap": {
                 "ip": self.soap_ip.text(),
@@ -525,6 +529,101 @@ class ServerUI(QMainWindow):
                 self.log_message(announcements)
         except Exception as e:
             self.log_message(f"读取公告文件失败: {e}")
+
+    def parse_soap_response(self, xml_string):
+        """解析SOAP响应，提取result内容或错误信息"""
+        try:
+            # 移除命名空间前缀，使解析更简单
+            xml_string = xml_string.replace('SOAP-ENV:', '').replace('ns1:', '')
+            root = ET.fromstring(xml_string)
+            
+            # 检查是否存在错误信息
+            fault = root.find('.//Fault')
+            if fault is not None:
+                fault_string = fault.find('faultstring').text
+                fault_detail = fault.find('detail').text
+                self.log_message(f"SOAP错误: {fault_string}\n详细信息: {fault_detail}")
+                return f"SOAP错误: {fault_string}\n详细信息: {fault_detail}"
+                
+            result = root.find('.//result')
+            return result.text if result is not None else "未找到结果"
+        except Exception as e:
+            self.log_message(f"SOAP解析错误: {str(e)}")
+            return f"解析错误: {str(e)}"
+
+    def soap_client(self, command):
+        """发送SOAP命令到游戏服务器"""
+        try:
+            # 从配置中获取SOAP连接信息
+            soap_ip = SERVER_CONFIG["soap"]["ip"]
+            soap_port = int(SERVER_CONFIG["soap"]["port"])
+            soap_user = SERVER_CONFIG["soap"]["username"]
+            soap_pass = SERVER_CONFIG["soap"]["password"]
+            
+            # 确保command是经过清理的字符串
+            command = command.strip()
+            
+            # 构建SOAP消息
+            soap_message = f"""<?xml version="1.0" encoding="UTF-8"?>
+            <SOAP-ENV:Envelope 
+                xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" 
+                xmlns:ns1="urn:MaNGOS">
+                <SOAP-ENV:Body>
+                    <ns1:executeCommand>
+                        <command>{command}</command>
+                    </ns1:executeCommand>
+                </SOAP-ENV:Body>
+            </SOAP-ENV:Envelope>""".strip()
+
+            # 创建认证字符串
+            auth_str = base64.b64encode(f"{soap_user}:{soap_pass}".encode()).decode()
+            
+            # 创建连接并设置超时
+            conn = http.client.HTTPConnection(soap_ip, soap_port, timeout=30)
+            
+            # 设置请求头，添加认证信息
+            headers = {
+                "Content-Type": "text/xml; charset=utf-8",
+                "SOAPAction": "urn:MaNGOS#executeCommand",
+                "Authorization": f"Basic {auth_str}",
+                "Content-Length": str(len(soap_message))
+            }
+            
+            # 发送请求
+            conn.request("POST", "/", soap_message, headers)
+            
+            # 获取响应
+            response = conn.getresponse()
+            data = response.read().decode()
+            
+            # 处理响应
+            self.log_message(f"SOAP响应状态: {response.status} {response.reason}")
+            result = self.parse_soap_response(data)
+            self.log_message(f"SOAP响应结果: {result}")
+            
+            conn.close()
+            return result
+            
+        except ConnectionError as ce:
+            error_msg = f"SOAP连接错误: {str(ce)}"
+            self.log_message(error_msg)
+            return error_msg
+        except TimeoutError:
+            error_msg = "SOAP请求超时"
+            self.log_message(error_msg)
+            return error_msg
+        except Exception as e:
+            error_msg = f"SOAP错误: {str(e)}"
+            self.log_message(error_msg)
+            return error_msg
+
+    # 示例：添加一个执行SOAP命令的方法
+    def execute_soap_command(self, command):
+        """执行SOAP命令并显示结果"""
+        result = self.soap_client(command)
+        self.log_message(f"执行命令: {command}")
+        self.log_message(f"执行结果: {result}")
+        return result
 
 if __name__ == "__main__":
     # 将QApplication实例命名为qt_app
