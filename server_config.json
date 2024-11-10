@@ -1,26 +1,19 @@
 {
-    "server": {
-        "host": "0.0.0.0",
-        "port": 8080,
-        "debug": true
-    },
-    "serverinfo": {
-        "ip": "127.0.0.1",
-        "port": "3724",
-        "title": "哈哈魔兽",
-        "gameserver_online": false,
-        "online_count": 0,
-        "server_notice": "1. 无限魔兽宣传 |n2. 1.独家自制各职业专属技能升级模式，任意升级GCD和技能群攻个数等 |n3. 2.自制五人挑战地图，凭实力挑战获得特殊装备。 |n4. 3.自制BOSS乐园，挑战最终BOSS可获得飞行坐骑。 |n5. 4.自制飞行地图，获得大量功法和特戒。 |n6. 5.收藏字体合成神龙触发特殊事件，进入隐藏地图。 |n7. 6.四天赋，略微增强，各职业都带群攻技能。 |n8. 7.新种族，高等精灵，地精，词条升级系统。 |n9. 8.战场，副本等多种地图获得积分。 |n10. 9.自制独立吞噬系统，好玩不烧脑。 |n11. 直通企鹅群: 743550476 |n12. 直通企鹅群: 743550476 |n13. 直通企鹅群: 743550476 |n14. 点击链接加入群聊【无限魔兽60服(112端)即将开服】：https://qm.qq.com/q/geSj1stbck |n15. 宣传人：黑猴子           宣传日期：XX |n16. 以下分开介绍 |n17. 宣传条件：QQ群五个或者论坛三个，二选一即可，不可去正常开服群宣传，"
-    },
-    "soap": {
-        "ip": "127.0.0.1",
-        "port": "7878",
-        "username": "1",
-        "password": "1"
-    },
-    "security": {
-        "jwt_secret": "your-secret-key",
-        "token_expire_minutes": 60,
-        "max_login_attempts": 5
-    }
+    "server_host": "0.0.0.0",
+    "server_port": 8080,
+    "server_debug": true,
+    "wow_ip": "127.0.0.1",
+    "wow_port": "3724",
+    "server_title": "无限魔兽",
+    "gameserver_online": 0,
+    "online_count": 0,
+    "force_wow": 1,
+    "force_mpq": 1,
+    "soap_ip": "127.0.0.1",
+    "soap_port": "7878",
+    "soap_username": "1",
+    "soap_password": "1",
+    "jwt_secret": "your-secret-key",
+    "token_expire_minutes": 60,
+    "max_login_attempts": 5
 }

@@ -105,8 +105,8 @@ class WowLauncher(QMainWindow):
             self.info_box.setText("无法获取服务器信息")
 
     def setup_ui(self):
-        # 标题文字放大300%
-        self.title_label = QLabel("连接中...", self)  # 初始标题，等待从服务器获取
+        # 题文字放大300%
+        self.title_label = QLabel("连接中...", self)  # 初始标题，等从服务器获取
         self.title_label.setGeometry(0, -50, 1228, 200)  # 增加高度以适应更大的字体
         self.title_label.setStyleSheet("""
             font-size: 64px;  /* 84px * 1 */
@@ -448,14 +448,22 @@ class WowLauncher(QMainWindow):
                     if response.status == 200:
                         data = await response.json()
                         server_files = data["files"]
-                        root_files = data["root_files"]
-                        force_update_wow = data.get("force_update_wow", False)
-                        force_clean_mpq = data.get("force_clean_mpq", False)
-                        mpq_whitelist = set(data.get("mpq_whitelist", []))  # 获取MPQ白名单
+                        
+                        # 从新的配置结构中读取值
+                        config = data.get("config", {})
+                        force_wow = int(config.get("force_wow", 0))
+                        force_mpq = int(config.get("force_mpq", 0))
+                        
+                        # 打印接收到的配置值用于调试
+                        print(f"接收到的配置: {json.dumps(config, indent=2)}")
+                        print(f"force_wow: {force_wow}")
+                        print(f"force_mpq: {force_mpq}")
+                        
+                        mpq_whitelist = set(data.get("mpq_whitelist", []))
+                        
                         self.log_message(f"获取到服务器文件列表: {len(server_files)}个文件")
-                        self.log_message(f"MPQ白名单: {len(mpq_whitelist)}个文件")
-                        self.log_message(f"强制更新WOW.EXE: {'是' if force_update_wow else '否'}")
-                        self.log_message(f"强制删除无关MPQ: {'是' if force_clean_mpq else '否'}")
+                        self.log_message(f"强制更新WOW.EXE: {'是' if force_wow == 1 else '否'}")
+                        self.log_message(f"强制删除无关MPQ: {'是' if force_mpq == 1 else '否'}")
                     else:
                         raise Exception("获取服务器文件列表失败")
 
@@ -463,58 +471,44 @@ class WowLauncher(QMainWindow):
             need_update = []
             total_size = 0
 
-            # 检查所有文件
+            # 处理文件更新
             for file_path, info in server_files.items():
                 local_path = os.path.join(client_root, file_path)
                 
-                # 如果是根目录的WOW.EXE且启用了强制更新
-                if force_update_wow and file_path.lower() == "wow.exe":
-                    # 即使启用强制更新，也进行文件比对
-                    if not os.path.exists(local_path):
-                        self.log_message(f"发现新文件: {file_path}")
-                        need_update.append(file_path)
+                # 处理Wow目录下的文件
+                if file_path.startswith("Wow/"):
+                    if force_wow == 1:
+                        # 强制更新Wow目录下的所有文件
+                        target_path = os.path.join(client_root, file_path.replace("Wow/", ""))
+                        self.log_message(f"添加Wow目录文件到更新列表: {file_path}")
+                        need_update.append((file_path, target_path))
                         total_size += info['size']
-                    else:
-                        local_hash = await self.get_file_hash(Path(local_path))
-                        if local_hash != info['hash']:
-                            self.log_message(f"WOW.EXE需要更新 (强制更新模式)")
-                            need_update.append(file_path)
-                            total_size += info['size']
-                        else:
-                            self.log_message("WOW.EXE已是最新版本，无需更新")
                     continue
 
-                # 检查其他文件
-                if not os.path.exists(local_path):
-                    self.log_message(f"发现新文件: {file_path}")
-                    need_update.append(file_path)
-                    total_size += info['size']
-                else:
-                    # 检查文件哈希值
-                    local_hash = await self.get_file_hash(Path(local_path))
-                    if local_hash != info['hash']:
-                        self.log_message(f"文件需要更新: {file_path}")
-                        need_update.append(file_path)
-                        total_size += info['size']
-
-            # 如果启用了强制删除无关MPQ
-            if force_clean_mpq:
-                self.log_message("检查无关MPQ文件...")
-                data_dir = os.path.join(client_root, "Data")
-                if os.path.exists(data_dir):
-                    for file in os.listdir(data_dir):
-                        if file.lower().endswith('.mpq'):
-                            file_lower = file.lower()
-                            # 检查文件是否在白名单中
-                            if file_lower not in mpq_whitelist:
-                                full_path = os.path.join(data_dir, file)
+                # 处理Data目录下的文件
+                if file_path.startswith("Data/"):
+                    if force_mpq == 1:
+                        # 检查是否在白名单中
+                        file_name = os.path.basename(file_path).lower()
+                        if file_name in mpq_whitelist:
+                            if not os.path.exists(local_path) or await self.get_file_hash(Path(local_path)) != info['hash']:
+                                self.log_message(f"添加白名单MPQ文件到更新列表: {file_path}")
+                                need_update.append((file_path, local_path))
+                                total_size += info['size']
+                        else:
+                            # 删除不在白名单中的MPQ文件
+                            if os.path.exists(local_path):
                                 try:
-                                    os.remove(full_path)
-                                    self.log_message(f"删除无关MPQ文件: {file}")
+                                    os.remove(local_path)
+                                    self.log_message(f"删除非白名单MPQ文件: {file_path}")
                                 except Exception as e:
-                                    self.log_message(f"删除文件失败 {file}: {str(e)}")
-                            else:
-                                self.log_message(f"保留白名单MPQ文件: {file}")
+                                    self.log_message(f"删除文件失败 {file_path}: {str(e)}")
+                    else:
+                        # 不检查白名单，只同步文件
+                        if not os.path.exists(local_path) or await self.get_file_hash(Path(local_path)) != info['hash']:
+                            self.log_message(f"添加Data目录文件到更新列表: {file_path}")
+                            need_update.append((file_path, local_path))
+                            total_size += info['size']
 
             if not need_update:
                 self.progress.hide()
@@ -527,18 +521,16 @@ class WowLauncher(QMainWindow):
             # 开始下载需要更新的文件
             self.log_message(f"需要更新 {len(need_update)} 个文件")
             downloaded_size = 0
-            for file_path in need_update:
+            for server_path, local_path in need_update:
                 try:
-                    self.log_message(f"正在更新: {file_path}")
+                    self.log_message(f"正在更新: {server_path}")
                     
                     # 确保目录存在
-                    local_path = os.path.join(client_root, file_path)
                     os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
                     # 下载文件
                     async with aiohttp.ClientSession() as session:
-                        # 对文件路径进行URL编码
-                        encoded_path = urllib.parse.quote(file_path)
+                        encoded_path = urllib.parse.quote(server_path)
                         url = f"http://localhost:8080/download/{encoded_path}"
                         self.log_message(f"下载URL: {url}")
                         
@@ -554,13 +546,13 @@ class WowLauncher(QMainWindow):
                                         downloaded_size += len(chunk)
                                         progress = int((downloaded_size / total_size) * 100)
                                         self.progress.setValue(progress)
-                                self.log_message(f"文件下载完成: {file_path}")
+                                self.log_message(f"文件下载完成: {server_path}")
                             else:
                                 error_text = await response.text()
                                 raise Exception(f"下载失败 ({response.status}): {error_text}")
 
                 except Exception as e:
-                    self.log_message(f"下载文件 {file_path} 失败: {str(e)}")
+                    self.log_message(f"下载文件 {server_path} 失败: {str(e)}")
                     raise
 
             self.progress.hide()
@@ -575,6 +567,26 @@ class WowLauncher(QMainWindow):
             self.update_btn.setEnabled(True)
             self.start_btn.setEnabled(True)
             QMessageBox.warning(self, "错误", f"更新失败: {str(e)}")
+
+        if force_mpq == 1:
+            self.log_message("检查无关MPQ文件...")
+            data_dir = os.path.join(client_root, "Data")
+            if os.path.exists(data_dir):
+                # 获取客户端Data目录下所有MPQ文件
+                client_mpq_files = [f for f in os.listdir(data_dir) if f.lower().endswith('.mpq')]
+                self.log_message(f"客户端MPQ文件: {client_mpq_files}")
+                self.log_message(f"白名单MPQ文件: {mpq_whitelist}")
+                
+                # 检查每个MPQ文件
+                for mpq_file in client_mpq_files:
+                    mpq_file_lower = mpq_file.lower()
+                    if mpq_file_lower not in mpq_whitelist:
+                        full_path = os.path.join(data_dir, mpq_file)
+                        try:
+                            os.remove(full_path)
+                            self.log_message(f"删除非白名单MPQ文件: {mpq_file}")
+                        except Exception as e:
+                            self.log_message(f"删除文件失败 {mpq_file}: {str(e)}")
 
     async def get_file_hash(self, filepath):
         """获取文件的MD5哈希值"""
@@ -724,7 +736,7 @@ class RegisterDialog(QDialog):
         
         # 创建输入框区域
         self.account_input = self._create_input("账号名称", "4-12位数字和字母")
-        self.password_input = self._create_input("输入密码", "4-12位数字和字母")
+        self.password_input = self._create_input("输入密", "4-12位数字和字母")
         self.confirm_pwd_input = self._create_input("确认密码", "两次输入的密码")
         self.security_pwd_input = self._create_input("安全密码", "1-8位数字和字母")
         
@@ -817,7 +829,7 @@ class RegisterDialog(QDialog):
         btn_layout.setSpacing(20)
         self.main_layout.addLayout(btn_layout)
         
-        # 连接按钮号
+        # 连按钮号
         self.confirm_btn.clicked.connect(self.accept)
         self.cancel_btn.clicked.connect(self.reject)
         

@@ -1,60 +1,47 @@
 import json
 import os
 
+# 配置文件路径
+CONFIG_FILE = "server_config.json"
+
 # 默认配置
 DEFAULT_CONFIG = {
-    "server": {
-        "host": "0.0.0.0",
-        "port": 8080,
-        "debug": True,
-    },
-    "serverinfo": {
-        "ip": "127.0.0.1",
-        "port": "3724",
-        "title": "无限魔兽",
-        "gameserver_online": False,
-        "online_count": 0,
-        "force_update_wow": False,
-        "force_clean_mpq": False
-    },
-    "soap": {
-        "ip": "127.0.0.1",
-        "port": "7878",
-        "username": "1",
-        "password": "1",
-    },
-    "security": {
-        "jwt_secret": "your-secret-key",
-        "token_expire_minutes": 60,
-        "max_login_attempts": 5
-    }
+    "server_port": 8080,
+    "wow_ip": "127.0.0.1",
+    "wow_port": 3724,
+    "server_title": "无限魔兽",
+    "soap_ip": "127.0.0.1",
+    "soap_port": 7878,
+    "soap_user": "1",
+    "soap_pass": "1",
+    "force_wow": 0,
+    "force_mpq": 0
 }
 
-CONFIG_FILE = "server_config.json"
+def save_config(config_data):
+    """保存配置到文件"""
+    try:
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(config_data, f, indent=4, ensure_ascii=False)
+        print(f"配置已保存: {config_data}")
+        return True
+    except Exception as e:
+        print(f"保存配置失败: {e}")
+        return False
 
 def load_config():
     """加载配置文件"""
     try:
         if os.path.exists(CONFIG_FILE):
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                loaded_config = json.load(f)
-                # 合并默认配置和加载的配置
-                merged_config = DEFAULT_CONFIG.copy()
-                merged_config.update(loaded_config)
-                return merged_config
+                config = json.load(f)
+                print(f"已加载配置: {config}")
+                return config
     except Exception as e:
-        print(f"加载配置文件失败: {e}")
-    return DEFAULT_CONFIG
+        print(f"加载配置失败: {e}")
+    
+    # 如果加载失败或文件不存在，返回默认配置
+    return DEFAULT_CONFIG.copy()
 
-def save_config(config):
-    """保存配置到文件"""
-    try:
-        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=4, ensure_ascii=False)
-        return True
-    except Exception as e:
-        print(f"保存配置文件失败: {e}")
-        return False
-
-# 初始化配置
-SERVER_CONFIG = load_config() 
+# 全局配置对象
+CONFIG = load_config()

@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
-from config import SERVER_CONFIG, save_config, load_config
+from config import CONFIG, save_config, load_config
 from network_opcodes import Opcodes
 import os
 import base64
@@ -66,9 +66,9 @@ class Database:
         self.characters = {}
         self.online_count = 0
         self.announcements = [
-            "欢迎来到无限魔兽！",
+            "欢迎来到XX魔兽！",
             "新服务器将于下周开放",
-            "当前版本: 3.3.5a"
+            "当前版本: 1.12.3"
         ]
         
     def add_account(self, account: str, password: str, security_pwd: str) -> bool:
@@ -88,34 +88,15 @@ db = Database()
 async def handle_request(request: Request):
     """处理客户端请求"""
     try:
-        # 获取请求数据
         request_data = await request.json()
-        print(f"收到请求数据: {request_data}")  # 调试信息
-        
         opcode = request_data.get("opcode")
         data = request_data.get("data", {})
         
-        print(f"操作码: {opcode}")  # 调试信息
-        print(f"数据: {data}")  # 调试信息
-        
-        if not isinstance(opcode, int):
-            return JSONResponse(
-                status_code=400,
-                content={"detail": "无效的操作码"}
-            )
-            
         if opcode == Opcodes.SERVER_STATUS:
-            # 从G.txt重新读取公告
-            try:
-                with open('G.txt', 'r', encoding='utf-8') as f:
-                    announcements = [line.strip() for line in f.readlines() if line.strip()]
-            except Exception as e:
-                announcements = ["暂无公告"]
-                
             return JSONResponse(content={
-                "status": "正常运行" if SERVER_CONFIG["serverinfo"]["gameserver_online"] else "离线",
-                "online_count": SERVER_CONFIG["serverinfo"]["online_count"],
-                "announcements": announcements  # 直接返回从文件读取的公告
+                "status": "正常运行" if CONFIG.get("gameserver_online", 0) == 1 else "离线",
+                "online_count": CONFIG.get("online_count", 0),
+                "announcements": db.announcements
             })
             
         elif opcode == Opcodes.REGISTER_ACCOUNT:
@@ -124,12 +105,9 @@ async def handle_request(request: Request):
             security_pwd = data["security_password"]
             
             if db.add_account(account, password, security_pwd):
-                return JSONResponse(content={"success": True, "message": "册成功"})
+                return JSONResponse(content={"success": True, "message": "注册成功"})
             else:
-                return JSONResponse(
-                    status_code=400,
-                    content={"detail": "账号已存在"}
-                )
+                raise HTTPException(status_code=400, detail="账号已存在")
 
         elif opcode == Opcodes.LOGIN_ACCOUNT:
             account = data["account"]
@@ -138,10 +116,7 @@ async def handle_request(request: Request):
             if account in db.accounts and db.accounts[account]["password"] == password:
                 return JSONResponse(content={"success": True, "message": "登录成功"})
             else:
-                return JSONResponse(
-                    status_code=401,
-                    content={"detail": "账号或密码错误"}
-                )
+                raise HTTPException(status_code=401, detail="账号或密码错误")
 
         elif opcode == Opcodes.CHECK_VERSION:
             return JSONResponse(content={
@@ -160,10 +135,7 @@ async def handle_request(request: Request):
                     "message": f"角色 {character_name} 已解锁"
                 })
             else:
-                return JSONResponse(
-                    status_code=404,
-                    content={"detail": "账号不存在"}
-                )
+                raise HTTPException(status_code=404, detail="账号不存在")
 
         elif opcode == Opcodes.CHANGE_PASSWORD:
             account = data["account"]
@@ -177,23 +149,14 @@ async def handle_request(request: Request):
                     "message": "密码修改成功"
                 })
             else:
-                return JSONResponse(
-                    status_code=400,
-                    content={"detail": "原密码错误"}
-                )
+                raise HTTPException(status_code=400, detail="原密码错误")
 
         else:
-            return JSONResponse(
-                status_code=400,
-                content={"detail": "未知的操作码"}
-            )
+            raise HTTPException(status_code=400, detail="未知的操作码")
 
     except Exception as e:
-        print(f"处理请求异常: {str(e)}")  # 调试信息
-        return JSONResponse(
-            status_code=500,
-            content={"detail": str(e)}
-        )
+        print(f"处理请求异常: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @api_app.get("/server_info")
 async def get_server_info():
@@ -207,17 +170,17 @@ async def get_server_info():
             announcements = ["暂无公告"]
             
         server_info = {
-            "wow_ip": SERVER_CONFIG["serverinfo"]["ip"],
-            "wow_port": SERVER_CONFIG["serverinfo"]["port"],
-            "login_title": SERVER_CONFIG["serverinfo"]["title"],
-            "gameserver_online": SERVER_CONFIG["serverinfo"]["gameserver_online"],
-            "online_count": SERVER_CONFIG["serverinfo"]["online_count"],
-            "status": "正常运行" if SERVER_CONFIG["serverinfo"]["gameserver_online"] else "离线",  # 添加状态
+            "wow_ip": CONFIG.get("wow_ip", "127.0.0.1"),
+            "wow_port": CONFIG.get("wow_port", "3724"),
+            "login_title": CONFIG.get("server_title", "无限魔兽"),
+            "status": "正常运行" if CONFIG.get("gameserver_online", 0) == 1 else "离线",
+            "online_count": CONFIG.get("online_count", 0),
             "announcements": announcements
         }
         return JSONResponse(content=server_info)
         
     except Exception as e:
+        print(f"获取服务器信息失败: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 class ServerUI(QMainWindow):
@@ -227,16 +190,12 @@ class ServerUI(QMainWindow):
         self.server_running = False
         self.download_path = "Download"
         self.setup_ui()
-        self.ensure_download_dir()
-        self.mpq_whitelist = self.load_mpq_whitelist()
         self.load_saved_config()
-        self.load_announcements()
-        self.setup_announcement_monitor()
-        self.setup_server_status_monitor()
-        
+        self.mpq_whitelist = self.load_mpq_whitelist()
+
     def setup_ui(self):
         # 设置窗口基本属性
-        self.setWindowTitle("无限魔兽服务器管理")
+        self.setWindowTitle("无限魔兽务器管理")
         self.setFixedSize(800, 600)
         
         # 设窗口样式
@@ -303,95 +262,59 @@ class ServerUI(QMainWindow):
 
         # 登录端口
         config_layout.addWidget(QLabel("登录端口:"), 0, 0)
-        self.login_port = QLineEdit("8080")
+        self.login_port = QLineEdit()
         self.login_port.setFixedWidth(100)
         config_layout.addWidget(self.login_port, 0, 1)
 
         # WOW服务器IP
         config_layout.addWidget(QLabel("WOW服务器IP:"), 1, 0)
-        self.wow_ip = QLineEdit("127.0.0.1")
+        self.wow_ip = QLineEdit()
         self.wow_ip.setFixedWidth(100)
         config_layout.addWidget(self.wow_ip, 1, 1)
 
         # WOW端口号
         config_layout.addWidget(QLabel("WOW端口号:"), 2, 0)
-        self.wow_port = QLineEdit("3724")
+        self.wow_port = QLineEdit()
         self.wow_port.setFixedWidth(100)
         config_layout.addWidget(self.wow_port, 2, 1)
 
-        # 登录器标题
+        # 服务器名称
         config_layout.addWidget(QLabel("服务器名称:"), 3, 0)
-        self.server_title = QLineEdit("哈哈魔兽")
+        self.server_title = QLineEdit()
         self.server_title.setFixedWidth(200)
         config_layout.addWidget(self.server_title, 3, 1)
 
-        # SOAP服务器IP
+        # SOAP配置
         config_layout.addWidget(QLabel("SOAP服务器IP:"), 0, 2)
-        self.soap_ip = QLineEdit("127.0.0.1")
+        self.soap_ip = QLineEdit()
         self.soap_ip.setFixedWidth(100)
         config_layout.addWidget(self.soap_ip, 0, 3)
 
-        # SOAP端口号
         config_layout.addWidget(QLabel("SOAP端口号:"), 1, 2)
-        self.soap_port = QLineEdit("7878")
+        self.soap_port = QLineEdit()
         self.soap_port.setFixedWidth(100)
         config_layout.addWidget(self.soap_port, 1, 3)
 
-        # SOAP用户名
         config_layout.addWidget(QLabel("SOAP用户名:"), 2, 2)
-        self.soap_user = QLineEdit("1")
+        self.soap_user = QLineEdit()
         self.soap_user.setFixedWidth(100)
         config_layout.addWidget(self.soap_user, 2, 3)
 
-        # SOAP密码
         config_layout.addWidget(QLabel("SOAP密码:"), 3, 2)
-        self.soap_pass = QLineEdit("1")
+        self.soap_pass = QLineEdit()
         self.soap_pass.setFixedWidth(100)
         config_layout.addWidget(self.soap_pass, 3, 3)
 
-        # 添加强制更新选项
-        self.force_wow_check = QCheckBox("强制更新WOW.EXE")
-        self.force_wow_check.setStyleSheet("""
-            QCheckBox {
-                color: white;
-                font-size: 14px;
-            }
-            QCheckBox::indicator {
-                width: 20px;
-                height: 20px;
-            }
-            QCheckBox::indicator:unchecked {
-                border: 2px solid #3498db;
-                background: transparent;
-            }
-            QCheckBox::indicator:checked {
-                border: 2px solid #3498db;
-                background: #3498db;
-            }
-        """)
-        config_layout.addWidget(self.force_wow_check, 4, 0, 1, 2)
+        # 更新根目录WOW.EXE
+        config_layout.addWidget(QLabel("更新根目录WOW.EXE等(0/1):"), 4, 0)
+        self.force_wow = QLineEdit()
+        self.force_wow.setFixedWidth(100)
+        config_layout.addWidget(self.force_wow, 4, 1)
 
-        # 添加强制删除选项
-        self.force_mpq_check = QCheckBox("强制删除无关MPQ")
-        self.force_mpq_check.setStyleSheet("""
-            QCheckBox {
-                color: white;
-                font-size: 14px;
-            }
-            QCheckBox::indicator {
-                width: 20px;
-                height: 20px;
-            }
-            QCheckBox::indicator:unchecked {
-                border: 2px solid #3498db;
-                background: transparent;
-            }
-            QCheckBox::indicator:checked {
-                border: 2px solid #3498db;
-                background: #3498db;
-            }
-        """)
-        config_layout.addWidget(self.force_mpq_check, 4, 2, 1, 2)
+        config_layout.addWidget(QLabel("强制删除无关MPQ(0/1):"), 4, 2)
+        self.force_mpq = QLineEdit()
+        self.force_mpq.setFixedWidth(100)
+        config_layout.addWidget(self.force_mpq, 4, 3)
 
         config_group.setLayout(config_layout)
         layout.addWidget(config_group)
@@ -424,12 +347,11 @@ class ServerUI(QMainWindow):
         
         status_layout.addStretch()
         
-        # 添加保存配置按钮
-        save_btn = QPushButton("保存配置")
-        save_btn.clicked.connect(self.save_current_config)
-        status_layout.addWidget(save_btn)
+        # 添加保存按钮
+        self.save_btn = QPushButton("保存配置")
+        self.save_btn.clicked.connect(self.save_current_config)
+        status_layout.addWidget(self.save_btn)
         
-        # 添加启动服务按钮
         self.start_btn = QPushButton("启动服务")
         self.start_btn.clicked.connect(self.toggle_server)
         status_layout.addWidget(self.start_btn)
@@ -466,7 +388,7 @@ class ServerUI(QMainWindow):
         options_layout.addWidget(self.force_wow_check)
 
         # 强制删除无关MPQ选项
-        self.force_mpq_check = QCheckBox("强制删除无关MPQ", options_container)
+        self.force_mpq_check = QCheckBox("强制删无关MPQ", options_container)
         self.force_mpq_check.setStyleSheet("""
             QCheckBox {
                 color: white;
@@ -544,23 +466,35 @@ class ServerUI(QMainWindow):
     def toggle_server(self):
         """切换服务器状态"""
         if not self.server_running:
-            # 启动服务器
-            self.server_running = True
-            self.start_btn.setText("停止服务")
-            self.status_label.setText("服务器状态: 启动中")
-            self.log_message("服务器启动中...")
-            
-            # 在新线程中启动服务器
-            self.server_thread = threading.Thread(target=self.run_server)
-            self.server_thread.daemon = True
-            self.server_thread.start()
-            
-            # 禁用配置输入
-            self.disable_config_inputs(True)
-            
-            # 立即检查一次服务器状态
-            QTimer.singleShot(2000, self.check_server_status)  # 2秒后检查
-            
+            # 启动前验证配置
+            try:
+                force_wow = int(CONFIG.get("force_wow", 0))
+                force_mpq = int(CONFIG.get("force_mpq", 0))
+                self.log_message(f"启动服务器 - 当前配置:")
+                self.log_message(f"force_wow: {force_wow}")
+                self.log_message(f"force_mpq: {force_mpq}")
+                
+                # 启动服务器
+                self.server_running = True
+                self.start_btn.setText("停止服务")
+                self.status_label.setText("服务器状态: 启动中")
+                self.log_message("服务器启动中...")
+                
+                # 在新线程中启动服务器
+                self.server_thread = threading.Thread(target=self.run_server)
+                self.server_thread.daemon = True
+                self.server_thread.start()
+                
+                # 禁用配置输入
+                self.disable_config_inputs(True)
+                
+                # 立即检查一次服务器状态
+                QTimer.singleShot(2000, self.check_server_status)
+                
+            except Exception as e:
+                self.log_message(f"启动服务器时发生错误: {str(e)}")
+                return
+                
         else:
             # 停止服务器
             self.server_running = False
@@ -569,8 +503,8 @@ class ServerUI(QMainWindow):
             self.log_message("服务器已停止")
             
             # 重置服务器状态
-            SERVER_CONFIG["serverinfo"]["gameserver_online"] = False
-            SERVER_CONFIG["serverinfo"]["online_count"] = 0
+            CONFIG["gameserver_online"] = 0  # 使用扁平化的配置
+            CONFIG["online_count"] = 0
             
             # 启用配置输入
             self.disable_config_inputs(False)
@@ -585,73 +519,84 @@ class ServerUI(QMainWindow):
         self.soap_port.setDisabled(disabled)
         self.soap_user.setDisabled(disabled)
         self.soap_pass.setDisabled(disabled)
+        self.force_wow.setDisabled(disabled)
+        self.force_mpq.setDisabled(disabled)
 
     def load_saved_config(self):
         """加载保存的配置"""
-        config = load_config()
+        config = CONFIG  # 使用全局配置对象
         
-        # 设置UI控件的值
-        self.login_port.setText(str(config["server"]["port"]))
-        self.wow_ip.setText(config["serverinfo"]["ip"])
-        self.wow_port.setText(str(config["serverinfo"]["port"]))
-        self.server_title.setText(config["serverinfo"]["title"])
-        self.soap_ip.setText(config["soap"]["ip"])
-        self.soap_port.setText(str(config["soap"]["port"]))
-        self.soap_user.setText(config["soap"]["username"])
-        self.soap_pass.setText(config["soap"]["password"])
+        # 从扁平化配置中加载值
+        self.login_port.setText(str(config.get("server_port", 8080)))
+        self.wow_ip.setText(config.get("wow_ip", "127.0.0.1"))
+        self.wow_port.setText(str(config.get("wow_port", "3724")))
+        self.server_title.setText(config.get("server_title", "无限魔兽"))
+        self.soap_ip.setText(config.get("soap_ip", "127.0.0.1"))
+        self.soap_port.setText(str(config.get("soap_port", "7878")))
+        self.soap_user.setText(config.get("soap_username", "1"))
+        self.soap_pass.setText(config.get("soap_password", "1"))
+        self.force_wow.setText(str(config.get("force_wow", 0)))
+        self.force_mpq.setText(str(config.get("force_mpq", 0)))
         
         self.log_message("配置已加载")
 
     def save_current_config(self):
         """保存当前配置"""
-        config = {
-            "server": {
-                "host": "0.0.0.0",
-                "port": int(self.login_port.text()),
-                "debug": True
-            },
-            "serverinfo": {
-                "ip": self.wow_ip.text(),
-                "port": self.wow_port.text(),
-                "title": self.server_title.text(),
-                "gameserver_online": SERVER_CONFIG["serverinfo"]["gameserver_online"],
-                "online_count": SERVER_CONFIG["serverinfo"]["online_count"],
-                "server_notice": SERVER_CONFIG["serverinfo"]["server_notice"]
-            },
-            "soap": {
-                "ip": self.soap_ip.text(),
-                "port": self.soap_port.text(),
-                "username": self.soap_user.text(),
-                "password": self.soap_pass.text()
-            },
-            "security": SERVER_CONFIG["security"]
-        }
-        
-        # 更新全局配置
-        SERVER_CONFIG.update(config)
-        
-        if save_config(config):
-            self.log_message("配置已保存")
-            QMessageBox.information(self, "成功", "配置已保存")
-        else:
-            QMessageBox.warning(self, "错误", "保存配置失败")
+        try:
+            # 使用扁平化的配置结构
+            config = {
+                "server_host": "0.0.0.0",
+                "server_port": int(self.login_port.text()),
+                "server_debug": True,
+                
+                "wow_ip": self.wow_ip.text(),
+                "wow_port": self.wow_port.text(),
+                "server_title": self.server_title.text(),
+                "gameserver_online": CONFIG.get("gameserver_online", 0),
+                "online_count": CONFIG.get("online_count", 0),
+                "force_wow": int(self.force_wow.text()),  # 确保是整数
+                "force_mpq": int(self.force_mpq.text()),  # 确保是整数
+                
+                "soap_ip": self.soap_ip.text(),
+                "soap_port": self.soap_port.text(),
+                "soap_username": self.soap_user.text(),
+                "soap_password": self.soap_pass.text(),
+                
+                "jwt_secret": CONFIG.get("jwt_secret", "your-secret-key"),
+                "token_expire_minutes": CONFIG.get("token_expire_minutes", 60),
+                "max_login_attempts": CONFIG.get("max_login_attempts", 5)
+            }
+            
+            # 打印要保存的配置
+            self.log_message(f"要保存的配置:")
+            self.log_message(f"force_wow: {config['force_wow']}")
+            self.log_message(f"force_mpq: {config['force_mpq']}")
+
+            if save_config(config):
+                # 更新全局配置
+                CONFIG.clear()
+                CONFIG.update(config)
+                
+                self.log_message("配置已保存")
+                QMessageBox.information(self, "成功", "配置已保存")
+            else:
+                QMessageBox.warning(self, "错误", "保存配置失败")
+        except Exception as e:
+            self.log_message(f"保存配置时发生错误: {str(e)}")
+            QMessageBox.warning(self, "错误", f"保存配置失败: {str(e)}")
 
     def run_server(self):
         """在新线程中运行服务器"""
         try:
-            # 使用api_app替代app
             config = uvicorn.Config(
-                app=api_app,  # 这里使用新的变量名
-                host=SERVER_CONFIG["server"]["host"],
-                port=int(self.login_port.text()),
+                app=api_app,
+                host=CONFIG.get("server_host", "0.0.0.0"),  # 使用扁平化的配置
+                port=int(CONFIG.get("server_port", 8080)),  # 使用扁平化的配置
                 reload=False,
                 log_level="info"
             )
             server = uvicorn.Server(config)
             server.install_signal_handlers = lambda: None
-            
-            # 更新运行时配置
-            SERVER_CONFIG["server"]["port"] = int(self.login_port.text())
             
             asyncio.run(server.serve())
             
@@ -691,14 +636,14 @@ class ServerUI(QMainWindow):
                 # 使用 |n 连接所有行
                 notice = " |n".join(f"{i+1}. {line}" for i, line in enumerate(lines))
                 # 更新配置
-                SERVER_CONFIG["serverinfo"]["server_notice"] = notice
+                CONFIG["serverinfo"]["server_notice"] = notice
                 # 同时更新据库中的公告
                 db.announcements = lines  # 更新这里
-                self.log_message("公告已更新:")
+                self.log_message("公告已更:")
                 self.log_message(notice)
         except Exception as e:
             self.log_message(f"读取公告文件失败: {e}")
-            SERVER_CONFIG["serverinfo"]["server_notice"] = "暂无公告"
+            CONFIG["serverinfo"]["server_notice"] = "暂无公告"
             db.announcements = ["暂无公告"]  # 更新这里
 
     def parse_soap_response(self, xml_string):
@@ -720,18 +665,18 @@ class ServerUI(QMainWindow):
             return result.text if result is not None else "未找到结果"
         except Exception as e:
             self.log_message(f"SOAP解析错误: {str(e)}")
-            return f"解析错误: {str(e)}"
+            return f"解析错: {str(e)}"
 
     def soap_client(self, command):
         """发送SOAP命令到游戏服务器"""
         try:
-            # 从配置中获取SOAP连接信息
-            soap_ip = SERVER_CONFIG["soap"]["ip"]
-            soap_port = int(SERVER_CONFIG["soap"]["port"])
-            soap_user = SERVER_CONFIG["soap"]["username"]
-            soap_pass = SERVER_CONFIG["soap"]["password"]
+            # 从扁平化配置中获取SOAP连接信息
+            soap_ip = CONFIG.get("soap_ip", "127.0.0.1")
+            soap_port = int(CONFIG.get("soap_port", "7878"))
+            soap_user = CONFIG.get("soap_username", "1")
+            soap_pass = CONFIG.get("soap_password", "1")
             
-            # 确保command是经过清理的字符串
+            # 确保command是经过清理的字串
             command = command.strip()
             
             # 构建SOAP消息
@@ -788,7 +733,6 @@ class ServerUI(QMainWindow):
             self.log_message(error_msg)
             return error_msg
 
-    # 示例：添加一个执行SOAP命令的方法
     def execute_soap_command(self, command):
         """执行SOAP命令并显示结果"""
         result = self.soap_client(command)
@@ -797,7 +741,7 @@ class ServerUI(QMainWindow):
         return result
 
     def setup_server_status_monitor(self):
-        """设置服务器状态监控"""
+        """置服务器状态监控"""
         self.status_timer = QTimer()
         self.status_timer.timeout.connect(self.check_server_status)
         self.status_timer.start(10000)  # 每10秒检查一次
@@ -811,26 +755,26 @@ class ServerUI(QMainWindow):
             
         result = self.execute_soap_command("server info")
         if "SOAP错误" in result or "连接错误" in result:
-            SERVER_CONFIG["serverinfo"]["gameserver_online"] = False
-            SERVER_CONFIG["serverinfo"]["online_count"] = 0
-            self.log_message("游戏服务器离线")
+            CONFIG["gameserver_online"] = 0  # 改为扁化结构
+            CONFIG["online_count"] = 0
+            self.log_message("游戏服务器离")
         else:
             try:
                 # 解析在线人数信息
                 # 示例响应: "Players online: 4 (0 queued). Max online: 4 (0 queued)."
                 if "Players online:" in result:
-                    SERVER_CONFIG["serverinfo"]["gameserver_online"] = True
+                    CONFIG["gameserver_online"] = 1  # 改为扁平化结构
                     # 提取当前在线人数
                     online_count = int(result.split("Players online:")[1].split("(")[0].strip())
-                    SERVER_CONFIG["serverinfo"]["online_count"] = online_count
+                    CONFIG["online_count"] = online_count
                     self.log_message(f"游戏服务器在线，当前在线人数: {online_count}")
                 else:
-                    SERVER_CONFIG["serverinfo"]["gameserver_online"] = False
-                    SERVER_CONFIG["serverinfo"]["online_count"] = 0
+                    CONFIG["gameserver_online"] = 0
+                    CONFIG["online_count"] = 0
                     self.log_message("无法解析服务器状态信息")
             except Exception as e:
-                SERVER_CONFIG["serverinfo"]["gameserver_online"] = False
-                SERVER_CONFIG["serverinfo"]["online_count"] = 0
+                CONFIG["gameserver_online"] = 0
+                CONFIG["online_count"] = 0
                 self.log_message(f"解析服务器状态失败: {str(e)}")
         
         # 更新状态显示
@@ -838,9 +782,9 @@ class ServerUI(QMainWindow):
         
     def update_status_display(self):
         """更新状态显示"""
-        if SERVER_CONFIG["serverinfo"]["gameserver_online"]:
+        if CONFIG.get("gameserver_online", 0) == 1:
             status = "运行中"
-            online_count = SERVER_CONFIG["serverinfo"]["online_count"]
+            online_count = CONFIG.get("online_count", 0)
         else:
             status = "离线"
             online_count = 0
@@ -883,19 +827,31 @@ class ServerUI(QMainWindow):
             self.log_message(f"扫描目录失败: {str(e)}")
         return files_info
 
-    def on_force_wow_changed(self, state):
-        """强制更新WOW.EXE选项改变处理"""
-        self.force_update_wow = bool(state)
-        self.log_message(f"强制更新WOW.EXE: {'开启' if self.force_update_wow else '关闭'}")
-        SERVER_CONFIG["serverinfo"]["force_update_wow"] = self.force_update_wow
-        save_config(SERVER_CONFIG)
+    def on_force_mpq_changed(self, text):
+        """强制删除无关MPQ选项改变处理"""
+        try:
+            value = text.strip()
+            if value not in ["0", "1"]:
+                self.force_mpq.setText("0")
+                return
+            self.log_message(f"MPQ选项状态改变: {value}")
+            CONFIG["force_clean_mpq"] = int(value)
+        except Exception as e:
+            self.log_message(f"更新MPQ选项时发生错误: {str(e)}")
+            self.force_mpq.setText("0")
 
-    def on_force_mpq_changed(self, state):
-        """强制删除无关MPQ���项改变处理"""
-        self.force_clean_mpq = bool(state)
-        self.log_message(f"强制删除无关MPQ: {'开启' if self.force_clean_mpq else '关闭'}")
-        SERVER_CONFIG["serverinfo"]["force_clean_mpq"] = self.force_clean_mpq
-        save_config(SERVER_CONFIG)
+    def on_force_wow_changed(self, text):
+        """强制更新WOW.EXE选项改变处理"""
+        try:
+            value = text.strip()
+            if value not in ["0", "1"]:
+                self.force_wow.setText("0")
+                return
+            self.log_message(f"WOW选项状态改变: {value}")
+            CONFIG["force_update_wow"] = int(value)
+        except Exception as e:
+            self.log_message(f"更新WOW选项时发生错误: {str(e)}")
+            self.force_wow.setText("0")
 
     def load_mpq_whitelist(self):
         """加载MPQ白名单"""
@@ -921,39 +877,94 @@ class ServerUI(QMainWindow):
                     mpq_files.add(file.lower())
         return mpq_files
 
+    def on_save_clicked(self):
+        """保存按钮点击处理"""
+        try:
+            # 直接从复选框获取当前状态
+            force_wow = 1 if self.force_wow_check.isChecked() else 0
+            force_mpq = 1 if self.force_mpq_check.isChecked() else 0
+            
+            self.log_message(f"保存配置 - 强制更新WOW: {force_wow}, 强制删除MPQ: {force_mpq}")
+            
+            # 使用扁平化的配置结构
+            config = {
+                "server_host": "0.0.0.0",
+                "server_port": int(self.login_port.text()),
+                "server_debug": True,
+                
+                "wow_ip": self.wow_ip.text(),
+                "wow_port": self.wow_port.text(),
+                "server_title": self.server_title.text(),
+                "gameserver_online": CONFIG.get("gameserver_online", 0),
+                "online_count": CONFIG.get("online_count", 0),
+                "force_wow": force_wow,  # 直接使用整数值
+                "force_mpq": force_mpq,  # 直接使用整数值
+                
+                "soap_ip": self.soap_ip.text(),
+                "soap_port": self.soap_port.text(),
+                "soap_username": self.soap_user.text(),
+                "soap_password": self.soap_pass.text(),
+                
+                "jwt_secret": CONFIG.get("jwt_secret", "your-secret-key"),
+                "token_expire_minutes": CONFIG.get("token_expire_minutes", 60),
+                "max_login_attempts": CONFIG.get("max_login_attempts", 5)
+            }
+            
+            # 更新全局配置
+            CONFIG.clear()
+            CONFIG.update(config)
+            
+            # 保存到文件
+            if save_config(config):
+                self.log_message("配置已保存")
+                self.log_message(f"保存的force_wow: {CONFIG.get('force_wow')}")
+                self.log_message(f"保存的force_mpq: {CONFIG.get('force_mpq')}")
+                QMessageBox.information(self, "成功", "配置已保存")
+            else:
+                QMessageBox.warning(self, "错误", "保存配置失败")
+                
+        except Exception as e:
+            self.log_message(f"保存配置时发生错误: {str(e)}")
+            QMessageBox.warning(self, "错误", f"保存配置失败: {str(e)}")
+
 # 添加新的API路由
 @api_app.get("/check_update")
 async def check_update():
-    """获取服务器文件列表"""
+    """获取服务器文件列表并处理MPQ同步"""
     try:
         download_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Download")
         print(f"扫描目录: {download_path}")
         
-        files_info = {}
-        root_files = {}
+        # 首先打印当前配置值，用于调试
+        force_wow = int(CONFIG.get("force_wow", 0))
+        force_mpq = int(CONFIG.get("force_mpq", 0))
+        print(f"当前配置 - force_wow: {force_wow}, force_mpq: {force_mpq}")
         
-        # 获取MPQ白名单
+        files_info = {}
+        
+        # 获取完整的MPQ白名单（基础白名单 + 服务器Data目录下的所有文件）
         mpq_whitelist = set()
         try:
+            # 1. 从MpqWhiteList.txt读取基础白名单
             with open('MpqWhiteList.txt', 'r', encoding='utf-8') as f:
                 for line in f:
-                    line = line.strip()
+                    line = line.strip().lower()
                     if line:
-                        mpq_whitelist.add(line.lower())
+                        mpq_whitelist.add(line)
+            print(f"从文件加载的基础MPQ白名单: {mpq_whitelist}")
+            
+            # 2. 添加服务器Data目录下的所有MPQ文件到白名单
+            server_data_path = os.path.join(download_path, "Data")
+            if os.path.exists(server_data_path):
+                for file in os.listdir(server_data_path):
+                    if file.lower().endswith('.mpq'):
+                        mpq_whitelist.add(file.lower())
+                        print(f"添加服务器MPQ到白名单: {file.lower()}")
+                        
+            print(f"最终的MPQ白名单: {mpq_whitelist}")
+            
         except Exception as e:
-            print(f"加载MPQ白名单失败: {str(e)}")
-
-        # 获取服务器Data目录下的MPQ文件
-        server_mpq_files = set()
-        data_path = os.path.join(download_path, "Data")
-        if os.path.exists(data_path):
-            for file in os.listdir(data_path):
-                if file.lower().endswith('.mpq'):
-                    server_mpq_files.add(file.lower())
-
-        # 合并白名单
-        complete_whitelist = mpq_whitelist.union(server_mpq_files)
-        print(f"完整MPQ白名单: {complete_whitelist}")
+            print(f"处理MPQ白名单失败: {str(e)}")
 
         # 扫描Download目录
         for root, _, files in os.walk(download_path):
@@ -962,34 +973,87 @@ async def check_update():
                 relative_path = os.path.relpath(full_path, download_path)
                 relative_path = relative_path.replace('\\', '/')
                 
-                print(f"发现文件: {relative_path}")
-                
-                file_info = {
-                    'hash': hashlib.md5(open(full_path, 'rb').read()).hexdigest(),
-                    'size': os.path.getsize(full_path)
-                }
+                # 根据不同目录和配置决定是否添加文件
+                if relative_path.startswith('Wow/'):
+                    # Wow目录下的文件只在force_wow=1时添加
+                    if int(CONFIG.get("force_wow", 0)) == 1:
+                        print(f"添加Wow目录文件: {relative_path}")
+                        files_info[relative_path] = {
+                            'hash': hashlib.md5(open(full_path, 'rb').read()).hexdigest(),
+                            'size': os.path.getsize(full_path),
+                            'is_mpq': False,
+                            'in_whitelist': False,
+                            'is_wow_file': True,
+                            'is_data_file': False
+                        }
+                elif relative_path.startswith('Data/'):
+                    # Data目录下的文件始终添加
+                    file_lower = file.lower()
+                    is_mpq = file_lower.endswith('.mpq')
+                    in_whitelist = file_lower in mpq_whitelist if is_mpq else False
+                    
+                    print(f"添加Data目录文件: {relative_path}")
+                    print(f"- 是否MPQ: {is_mpq}")
+                    print(f"- 是否在白名单: {in_whitelist}")
+                    
+                    files_info[relative_path] = {
+                        'hash': hashlib.md5(open(full_path, 'rb').read()).hexdigest(),
+                        'size': os.path.getsize(full_path),
+                        'is_mpq': is_mpq,
+                        'in_whitelist': in_whitelist,
+                        'is_wow_file': False,
+                        'is_data_file': True
+                    }
+                else:
+                    # 其他目录的文件始终添加
+                    print(f"添加其他目录文件: {relative_path}")
+                    files_info[relative_path] = {
+                        'hash': hashlib.md5(open(full_path, 'rb').read()).hexdigest(),
+                        'size': os.path.getsize(full_path),
+                        'is_mpq': False,
+                        'in_whitelist': False,
+                        'is_wow_file': False,
+                        'is_data_file': False
+                    }
 
-                if '/' not in relative_path:
-                    root_files[relative_path] = file_info
-                files_info[relative_path] = file_info
+        # 确保使用整数值并明确指定
+        force_wow = 1 if int(CONFIG.get("force_wow", 0)) == 1 else 0
+        force_mpq = 1 if int(CONFIG.get("force_mpq", 0)) == 1 else 0
 
-        # 确保配置中存在所需的键
-        if "serverinfo" not in SERVER_CONFIG:
-            SERVER_CONFIG["serverinfo"] = {}
-        if "force_update_wow" not in SERVER_CONFIG["serverinfo"]:
-            SERVER_CONFIG["serverinfo"]["force_update_wow"] = False
-        if "force_clean_mpq" not in SERVER_CONFIG["serverinfo"]:
-            SERVER_CONFIG["serverinfo"]["force_clean_mpq"] = False
-
-        return JSONResponse(content={
+        # 构建响应数据，添加更多信息
+        response_data = {
             "files": files_info,
-            "root_files": root_files,
-            "force_update_wow": SERVER_CONFIG["serverinfo"].get("force_update_wow", False),
-            "force_clean_mpq": SERVER_CONFIG["serverinfo"].get("force_clean_mpq", False),
-            "mpq_whitelist": list(complete_whitelist)
-        })
+            "config": {
+                "force_wow": force_wow,
+                "force_mpq": force_mpq,
+                "force_wow_enabled": bool(force_wow),  # 添加布尔值
+                "force_mpq_enabled": bool(force_mpq)   # 添加布尔值
+            },
+            "mpq_whitelist": list(mpq_whitelist)
+        }
+        
+        # 打印完整的响应数据用于调试
+        print("\n完整的响应数据:")
+        print(json.dumps(response_data, indent=2, ensure_ascii=False))
+        print(f"\n配置值:")
+        print(f"- force_wow: {force_wow} (类型: {type(force_wow)})")
+        print(f"- force_mpq: {force_mpq} (类型: {type(force_mpq)})")
+        
+        # 使用 JSONResponse 时指定媒体类型和编码，并添加额外的响应头
+        return JSONResponse(
+            content=response_data,
+            media_type="application/json",
+            headers={
+                "Content-Type": "application/json; charset=utf-8",
+                "X-Force-Wow": str(force_wow),
+                "X-Force-Mpq": str(force_mpq)
+            }
+        )
+        
     except Exception as e:
         print(f"获取文件列表失败: {str(e)}")
+        print(f"异常类型: {type(e)}")
+        print(f"异常详情: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_app.get("/download/{file_path:path}")
