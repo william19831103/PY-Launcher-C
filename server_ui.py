@@ -231,7 +231,7 @@ class ServerUI(QMainWindow):
         self.setWindowTitle("无限魔兽服务器管理")
         self.setFixedSize(800, 600)
         
-        # 设置窗口样式
+        # 设���窗口样式
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #1a1a1a;
@@ -311,8 +311,8 @@ class ServerUI(QMainWindow):
         self.wow_port.setFixedWidth(100)
         config_layout.addWidget(self.wow_port, 2, 1)
 
-        # 登录器标题
-        config_layout.addWidget(QLabel("登录器标题:"), 3, 0)
+        # 服务器名称
+        config_layout.addWidget(QLabel("服务器名称:"), 3, 0)
         self.server_title = QLineEdit("无限火力魔兽")
         self.server_title.setFixedWidth(200)
         config_layout.addWidget(self.server_title, 3, 1)
@@ -462,7 +462,9 @@ class ServerUI(QMainWindow):
                 "ip": self.wow_ip.text(),
                 "port": self.wow_port.text(),
                 "title": self.server_title.text(),
-                "online_count": 0  # 这个值会在运行时动态更新
+                "gameserver_online": SERVER_CONFIG["serverinfo"]["gameserver_online"],
+                "online_count": SERVER_CONFIG["serverinfo"]["online_count"],
+                "server_notice": SERVER_CONFIG["serverinfo"]["server_notice"]
             },
             "soap": {
                 "ip": self.soap_ip.text(),
@@ -472,6 +474,9 @@ class ServerUI(QMainWindow):
             },
             "security": SERVER_CONFIG["security"]
         }
+        
+        # 更新全局配置
+        SERVER_CONFIG.update(config)
         
         if save_config(config):
             self.log_message("配置已保存")
