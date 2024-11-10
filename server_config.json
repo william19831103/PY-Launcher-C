@@ -1,0 +1,35 @@
+{
+    "server": {
+        "host": "0.0.0.0",
+        "port": 8081,
+        "debug": true
+    },
+    "login": {
+        "port": "8081",
+        "title": "无限魔兽1"
+    },
+    "wow": {
+        "ip": "127.0.0.1",
+        "port": "3724"
+    },
+    "soap": {
+        "ip": "127.0.0.1",
+        "port": "7878",
+        "username": "1",
+        "password": "1"
+    },
+    "database": {
+        "type": "sqlite",
+        "path": "wow_server.db"
+    },
+    "game": {
+        "current_version": "3.3.5a",
+        "min_version": "3.3.5a",
+        "patch_server": "http://patches.yourserver.com"
+    },
+    "security": {
+        "jwt_secret": "your-secret-key",
+        "token_expire_minutes": 60,
+        "max_login_attempts": 5
+    }
+}

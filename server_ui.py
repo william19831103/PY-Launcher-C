@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
-from config import SERVER_CONFIG
+from config import SERVER_CONFIG, save_config, load_config
 from network_opcodes import Opcodes
 
 # FastAPI应用
@@ -133,6 +133,7 @@ class ServerUI(QMainWindow):
         self.server_thread = None
         self.server_running = False
         self.setup_ui()
+        self.load_saved_config()  # 加载保存的配置
         
     def setup_ui(self):
         # 设置窗口基本属性
@@ -202,7 +203,7 @@ class ServerUI(QMainWindow):
         config_layout = QGridLayout()
 
         # 登录端口
-        config_layout.addWidget(QLabel("登录端口:"), 0, 0)
+        config_layout.addWidget(QLabel("登录器端口:"), 0, 0)
         self.login_port = QLineEdit("8080")
         self.login_port.setFixedWidth(100)
         config_layout.addWidget(self.login_port, 0, 1)
@@ -280,6 +281,12 @@ class ServerUI(QMainWindow):
         
         status_layout.addStretch()
         
+        # 添加保存配置按钮
+        save_btn = QPushButton("保存配置")
+        save_btn.clicked.connect(self.save_current_config)
+        status_layout.addWidget(save_btn)
+        
+        # 添加启动服务按钮
         self.start_btn = QPushButton("启动服务")
         self.start_btn.clicked.connect(self.toggle_server)
         status_layout.addWidget(self.start_btn)
@@ -329,21 +336,70 @@ class ServerUI(QMainWindow):
         self.soap_user.setDisabled(disabled)
         self.soap_pass.setDisabled(disabled)
 
+    def load_saved_config(self):
+        """加载保存的配置"""
+        config = load_config()
+        
+        # 设置UI控件的值
+        self.login_port.setText(str(config["login"]["port"]))
+        self.wow_ip.setText(config["wow"]["ip"])
+        self.wow_port.setText(str(config["wow"]["port"]))
+        self.server_title.setText(config["login"]["title"])
+        self.soap_ip.setText(config["soap"]["ip"])
+        self.soap_port.setText(str(config["soap"]["port"]))
+        self.soap_user.setText(config["soap"]["username"])
+        self.soap_pass.setText(config["soap"]["password"])
+        
+        self.log_message("配置已加载")
+
+    def save_current_config(self):
+        """保存当前配置"""
+        config = {
+            "server": {
+                "host": "0.0.0.0",
+                "port": int(self.login_port.text()),
+                "debug": True
+            },
+            "login": {
+                "port": self.login_port.text(),
+                "title": self.server_title.text()
+            },
+            "wow": {
+                "ip": self.wow_ip.text(),
+                "port": self.wow_port.text()
+            },
+            "soap": {
+                "ip": self.soap_ip.text(),
+                "port": self.soap_port.text(),
+                "username": self.soap_user.text(),
+                "password": self.soap_pass.text()
+            },
+            "security": SERVER_CONFIG["security"]
+        }
+        
+        if save_config(config):
+            self.log_message("配置已保存")
+            QMessageBox.information(self, "成功", "配置已保存")
+        else:
+            QMessageBox.warning(self, "错误", "保存配置失败")
+
     def run_server(self):
         """在新线程中运行服务器"""
         try:
+            # 使用当前配置启动服务器
             config = uvicorn.Config(
                 app=app,
-                host=SERVER_CONFIG["host"],
+                host=SERVER_CONFIG["server"]["host"],
                 port=int(self.login_port.text()),
                 reload=False,
                 log_level="info"
             )
             server = uvicorn.Server(config)
-            # 将服务器日志重定向到UI
             server.install_signal_handlers = lambda: None
             
-            # 运行服务器并捕获输出
+            # 更新运行时配置
+            SERVER_CONFIG["server"]["port"] = int(self.login_port.text())
+            
             asyncio.run(server.serve())
             
         except Exception as e:
