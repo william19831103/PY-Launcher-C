@@ -12,6 +12,9 @@ from network_opcodes import Opcodes
 import json
 import aiohttp
 import asyncio
+import hashlib
+from pathlib import Path
+import urllib.parse
 
 class WowLauncher(QMainWindow):
     def __init__(self):
@@ -250,7 +253,7 @@ class WowLauncher(QMainWindow):
         # 连接信号
         self.register_btn.clicked.connect(self.open_register)
         self.shop_btn.clicked.connect(self.open_shop)
-        self.update_btn.clicked.connect(self.check_update)
+        self.update_btn.clicked.connect(self.check_update_clicked)
         self.start_btn.clicked.connect(self.start_game)
         
         # 初始化服务器状态
@@ -413,25 +416,130 @@ class WowLauncher(QMainWindow):
     def open_shop(self):
         QDesktopServices.openUrl(QUrl("http://your-server.com/shop"))
     
-    def check_update(self):
-        self.progress.show()
-        self.progress.setValue(0)
+    def check_update_clicked(self):
+        """检查更新按钮点击处理"""
+        # 创建事件循环
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         
-        # 模拟更新进度
-        self.update_progress = 0
-        self.update_timer = QTimer()
-        self.update_timer.timeout.connect(self.update_progress_bar)
-        self.update_timer.start(50)
-    
-    def update_progress_bar(self):
-        self.update_progress += 1
-        self.progress.setValue(self.update_progress)
-        
-        if self.update_progress >= 100:
-            self.update_timer.stop()
-            QMessageBox.information(self, "更新完成", "客户端已是最新版本！")
+        try:
+            # 运行异步任务
+            loop.run_until_complete(self.check_update())
+        finally:
+            # 关闭事件循环
+            loop.close()
+
+    async def check_update(self):
+        """检查更新"""
+        try:
+            self.progress.show()
+            self.progress.setValue(0)
+            self.update_btn.setEnabled(False)
+            self.start_btn.setEnabled(False)
+            self.log_message("开始检查更新...")
+
+            # 获取客户端根目录
+            client_root = os.path.dirname(os.path.abspath(__file__))
+            self.log_message(f"客户端目录: {client_root}")
+
+            # 获取服务器文件列表
+            async with aiohttp.ClientSession() as session:
+                async with session.get("http://localhost:8080/check_update") as response:
+                    if response.status == 200:
+                        server_files = (await response.json())["files"]
+                        self.log_message(f"获取到服务器文件列表: {len(server_files)}个文件")
+                    else:
+                        raise Exception("获取服务器文件列表失败")
+
+            # 检查本地文件
+            need_update = []
+            total_size = 0
+            for file_path, info in server_files.items():
+                local_path = os.path.join(client_root, file_path)
+                if not os.path.exists(local_path):
+                    self.log_message(f"发现新文件: {file_path}")
+                    need_update.append(file_path)
+                    total_size += info['size']
+                else:
+                    # 检查文件哈希值
+                    local_hash = await self.get_file_hash(Path(local_path))
+                    if local_hash != info['hash']:
+                        self.log_message(f"文件需要更新: {file_path}")
+                        need_update.append(file_path)
+                        total_size += info['size']
+
+            if not need_update:
+                self.progress.hide()
+                self.update_btn.setEnabled(True)
+                self.start_btn.setEnabled(True)
+                self.log_message("客户端已是最新版本")
+                QMessageBox.information(self, "更新", "客户端已是最新版本")
+                return
+
+            # 开始下载需要更新的文件
+            self.log_message(f"需要更新 {len(need_update)} 个文件")
+            downloaded_size = 0
+            for file_path in need_update:
+                try:
+                    self.log_message(f"正在更新: {file_path}")
+                    
+                    # 确保目录存在
+                    local_path = os.path.join(client_root, file_path)
+                    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+                    # 下载文件
+                    async with aiohttp.ClientSession() as session:
+                        # 对文件路径进行URL编码
+                        encoded_path = urllib.parse.quote(file_path)
+                        url = f"http://localhost:8080/download/{encoded_path}"
+                        self.log_message(f"下载URL: {url}")
+                        
+                        async with session.get(url) as response:
+                            if response.status == 200:
+                                self.log_message(f"开始下载到: {local_path}")
+                                with open(local_path, 'wb') as f:
+                                    while True:
+                                        chunk = await response.content.read(8192)
+                                        if not chunk:
+                                            break
+                                        f.write(chunk)
+                                        downloaded_size += len(chunk)
+                                        progress = int((downloaded_size / total_size) * 100)
+                                        self.progress.setValue(progress)
+                                self.log_message(f"文件下载完成: {file_path}")
+                            else:
+                                error_text = await response.text()
+                                raise Exception(f"下载失败 ({response.status}): {error_text}")
+
+                except Exception as e:
+                    self.log_message(f"下载文件 {file_path} 失败: {str(e)}")
+                    raise
+
             self.progress.hide()
-    
+            self.update_btn.setEnabled(True)
+            self.start_btn.setEnabled(True)
+            self.log_message("更新完成")
+            QMessageBox.information(self, "更新", "更新完成")
+
+        except Exception as e:
+            self.log_message(f"更新失败: {str(e)}")
+            self.progress.hide()
+            self.update_btn.setEnabled(True)
+            self.start_btn.setEnabled(True)
+            QMessageBox.warning(self, "错误", f"更新失败: {str(e)}")
+
+    async def get_file_hash(self, filepath):
+        """获取文件的MD5哈希值"""
+        try:
+            md5_hash = hashlib.md5()
+            with open(filepath, 'rb') as f:
+                for chunk in iter(lambda: f.read(4096), b''):
+                    md5_hash.update(chunk)
+            return md5_hash.hexdigest()
+        except Exception as e:
+            self.log_message(f"计算文件哈希失败 {filepath}: {str(e)}")
+            return None
+
     def start_game(self):
         wow_path = "C:\\Program Files\\World of Warcraft\\Wow.exe"
         if os.path.exists(wow_path):
@@ -480,6 +588,20 @@ class WowLauncher(QMainWindow):
             self.info_box.setText(status)
         except Exception as e:
             print(f"更新服务器信息失败: {str(e)}")
+
+    def log_message(self, message):
+        """添加日志消息到信息框"""
+        current_text = self.info_box.toPlainText()
+        if current_text:
+            current_text += "\n"
+        current_text += message
+        self.info_box.setText(current_text)
+        # 滚动到底部
+        self.info_box.verticalScrollBar().setValue(
+            self.info_box.verticalScrollBar().maximum()
+        )
+        # 让 Qt 处理事件，立即更新显示
+        QApplication.processEvents()
 
 class RegisterDialog(QDialog):
     def __init__(self, parent=None):
@@ -657,7 +779,7 @@ class RegisterDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(15)
         
-        # 创建左侧标签
+        # 创左侧标签
         label = QLabel(f"{label_text}:")
         label.setFixedWidth(100)
         

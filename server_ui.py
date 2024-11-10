@@ -6,7 +6,7 @@ import uvicorn
 import threading
 import asyncio
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
@@ -17,6 +17,10 @@ import os
 import base64
 import http.client
 import xml.etree.ElementTree as ET
+import hashlib
+import json
+from pathlib import Path
+import urllib.parse
 
 
 
@@ -226,6 +230,8 @@ class ServerUI(QMainWindow):
         self.load_announcements()
         self.setup_announcement_monitor()
         self.setup_server_status_monitor()
+        self.download_path = "Download"  # 服务器下载目录
+        self.ensure_download_dir()
         
     def setup_ui(self):
         # 设置窗口基本属性
@@ -378,7 +384,7 @@ class ServerUI(QMainWindow):
         save_btn.clicked.connect(self.save_current_config)
         status_layout.addWidget(save_btn)
         
-        # 添加启动服务按钮
+        # 添加启动服���按钮
         self.start_btn = QPushButton("启动服务")
         self.start_btn.clicked.connect(self.toggle_server)
         status_layout.addWidget(self.start_btn)
@@ -695,6 +701,105 @@ class ServerUI(QMainWindow):
             online_count = 0
             
         self.status_label.setText(f"服务器状态: {status} | 在线人数: {online_count}")
+
+    def ensure_download_dir(self):
+        """确保下载目录存在"""
+        if not os.path.exists(self.download_path):
+            os.makedirs(self.download_path)
+            os.makedirs(os.path.join(self.download_path, "Data"))
+
+    def get_file_hash(self, filepath):
+        """获取文件的MD5哈希值"""
+        try:
+            with open(filepath, 'rb') as f:
+                md5_hash = hashlib.md5()
+                for chunk in iter(lambda: f.read(4096), b''):
+                    md5_hash.update(chunk)
+                return md5_hash.hexdigest()
+        except Exception as e:
+            self.log_message(f"计算文件哈希失败 {filepath}: {str(e)}")
+            return None
+
+    def scan_directory(self, directory):
+        """扫描目录获取文件列表和哈希值"""
+        files_info = {}
+        try:
+            for root, _, files in os.walk(directory):
+                for file in files:
+                    full_path = os.path.join(root, file)
+                    relative_path = os.path.relpath(full_path, directory)
+                    file_hash = self.get_file_hash(full_path)
+                    if file_hash:
+                        files_info[relative_path] = {
+                            'hash': file_hash,
+                            'size': os.path.getsize(full_path)
+                        }
+        except Exception as e:
+            self.log_message(f"扫描目录失败: {str(e)}")
+        return files_info
+
+# 添加新的API路由
+@api_app.get("/check_update")
+async def check_update():
+    """获取服务器文件列表"""
+    try:
+        # 获取Download目录的绝对路径
+        download_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Download")
+        print(f"扫描目录: {download_path}")
+        
+        files_info = {}
+        # 扫描Download目录
+        for root, _, files in os.walk(download_path):
+            for file in files:
+                full_path = os.path.join(root, file)
+                # 获取相对于Download目录的路径
+                relative_path = os.path.relpath(full_path, download_path)
+                # 统一使用正斜杠
+                relative_path = relative_path.replace('\\', '/')
+                
+                print(f"发现文件: {relative_path}")
+                
+                with open(full_path, 'rb') as f:
+                    md5_hash = hashlib.md5()
+                    for chunk in iter(lambda: f.read(4096), b''):
+                        md5_hash.update(chunk)
+                files_info[relative_path] = {
+                    'hash': md5_hash.hexdigest(),
+                    'size': os.path.getsize(full_path)
+                }
+        
+        print(f"文件列表: {files_info}")
+        return JSONResponse(content={"files": files_info})
+    except Exception as e:
+        print(f"获取文件列表失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_app.get("/download/{file_path:path}")
+async def download_file(file_path: str):
+    """下载指定文件"""
+    try:
+        # 解码文件路径
+        file_path = urllib.parse.unquote(file_path)
+        # 规范化路径分隔符
+        file_path = file_path.replace('\\', '/')
+        # 构建完整的文件路径
+        full_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Download", file_path)
+        
+        print(f"请求下载文件: {file_path}")
+        print(f"完整路径: {full_path}")
+        
+        if os.path.exists(full_path) and os.path.isfile(full_path):
+            return FileResponse(
+                path=full_path,
+                filename=os.path.basename(file_path),
+                media_type='application/octet-stream'
+            )
+        else:
+            print(f"文件不存在: {full_path}")
+            raise HTTPException(status_code=404, detail=f"文件不存在: {file_path}")
+    except Exception as e:
+        print(f"下载文件失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     # 将QApplication实例命名为qt_app
