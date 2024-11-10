@@ -304,20 +304,19 @@ class WowLauncher(QMainWindow):
     def update_server_status(self):
         """更新服务器状态"""
         try:
-            # 使用空数据调用服务器状态接口
             response = asyncio.run(self.send_request(Opcodes.SERVER_STATUS))
             if response:
                 status = f"服务器状态: {response.get('status', '未知')}\n"
                 status += f"在线人数: {response.get('online_count', 0)}\n\n"
-                status += "公告：\n"
                 
-                announcements = response.get('announcements', [])
+                # 处理公告内容
+                announcements = response.get('announcements', ['暂无公告'])
                 for i, announcement in enumerate(announcements, 1):
                     status += f"{i}. {announcement}\n"
                     
                 self.info_box.setText(status)
         except Exception as e:
-            print(f"更新服务器状态失败: {str(e)}")  # 调试信息
+            print(f"更新服务器状态失败: {str(e)}")
             self.info_box.setText("无法获取服务器状态")
     
     def open_register(self):
@@ -419,9 +418,10 @@ class WowLauncher(QMainWindow):
         self.setWindowTitle(server_info["login_title"])
         
         # 更新公告
-        announcements = server_info["announcements"]
-        announcement_text = "\n".join(announcements)
-        self.info_box.setText(announcement_text)
+        server_notice = server_info.get("server_notice", "暂无公告")
+        # 将 |n 替换为实际的换行符
+        server_notice = server_notice.replace(" |n", "\n")
+        self.info_box.setText(server_notice)
 
 class RegisterDialog(QDialog):
     def __init__(self, parent=None):

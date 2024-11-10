@@ -101,19 +101,17 @@ async def handle_request(request: Request):
             )
             
         if opcode == Opcodes.SERVER_STATUS:
-            # 读取公告文件
-            announcements = []
+            # 从G.txt重新读取公告
             try:
                 with open('G.txt', 'r', encoding='utf-8') as f:
                     announcements = [line.strip() for line in f.readlines() if line.strip()]
             except Exception as e:
-                print(f"读取公告文件失败: {e}")
                 announcements = ["暂无公告"]
-
+                
             return JSONResponse(content={
-                "status": "正常运行",
-                "online_count": db.online_count,
-                "announcements": announcements
+                "status": "正常运行" if SERVER_CONFIG["serverinfo"]["gameserver_online"] else "离线",
+                "online_count": SERVER_CONFIG["serverinfo"]["online_count"],
+                "announcements": announcements  # 直接返回从文件读取的公告
             })
             
         elif opcode == Opcodes.REGISTER_ACCOUNT:
@@ -197,24 +195,13 @@ async def handle_request(request: Request):
 async def get_server_info():
     """获取服务器信息"""
     try:
-        # 读取公告文件
-        announcements = []
-        try:
-            with open('G.txt', 'r', encoding='utf-8') as f:
-                announcements = [line.strip() for line in f.readlines() if line.strip()]
-        except Exception as e:
-            print(f"读取公告文件失败: {e}")
-            announcements = ["暂无公告"]
-
-        # 构建服务器信息
-        server_info = ServerInfo(
-            wow_ip=SERVER_CONFIG["serverinfo"]["ip"],
-            wow_port=SERVER_CONFIG["serverinfo"]["port"],
-            login_title=SERVER_CONFIG["serverinfo"]["title"],
-            announcements=announcements
-        )
-        
-        return server_info.dict()
+        server_info = {
+            "wow_ip": SERVER_CONFIG["serverinfo"]["ip"],
+            "wow_port": SERVER_CONFIG["serverinfo"]["port"],
+            "login_title": SERVER_CONFIG["serverinfo"]["title"],
+            "server_notice": SERVER_CONFIG["serverinfo"]["server_notice"]
+        }
+        return JSONResponse(content=server_info)
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -226,7 +213,9 @@ class ServerUI(QMainWindow):
         self.server_running = False
         self.setup_ui()
         self.load_saved_config()
+        self.load_announcements()
         self.setup_announcement_monitor()
+        self.setup_server_status_monitor()
         
     def setup_ui(self):
         # 设置窗口基本属性
@@ -397,7 +386,7 @@ class ServerUI(QMainWindow):
             # 启动服务器
             self.server_running = True
             self.start_btn.setText("停止服务")
-            self.status_label.setText("服务器状态: 运行中")
+            self.status_label.setText("服务器状态: 启动中")
             self.log_message("服务器启动中...")
             
             # 在新线程中启动服务器
@@ -408,12 +397,19 @@ class ServerUI(QMainWindow):
             # 禁用配置输入
             self.disable_config_inputs(True)
             
+            # 立即检查一次服务器状态
+            QTimer.singleShot(2000, self.check_server_status)  # 2秒后检查
+            
         else:
             # 停止服务器
             self.server_running = False
             self.start_btn.setText("启动服务")
             self.status_label.setText("服务器状态: 已停止")
             self.log_message("服务器已停止")
+            
+            # 重置服务器状态
+            SERVER_CONFIG["serverinfo"]["gameserver_online"] = False
+            SERVER_CONFIG["serverinfo"]["online_count"] = 0
             
             # 启用配置输入
             self.disable_config_inputs(False)
@@ -521,14 +517,23 @@ class ServerUI(QMainWindow):
             self.load_announcements()
             
     def load_announcements(self):
-        """加载公告内容"""
+        """加载公告内容到配置"""
         try:
             with open('G.txt', 'r', encoding='utf-8') as f:
-                announcements = f.read()
+                # 读取所有行并过滤空行
+                lines = [line.strip() for line in f.readlines() if line.strip()]
+                # 使用 |n 连接所有行
+                notice = " |n".join(f"{i+1}. {line}" for i, line in enumerate(lines))
+                # 更新配置
+                SERVER_CONFIG["serverinfo"]["server_notice"] = notice
+                # 同时更新数据库中的公告
+                db.announcements = lines  # 更新这里
                 self.log_message("公告已更新:")
-                self.log_message(announcements)
+                self.log_message(notice)
         except Exception as e:
             self.log_message(f"读取公告文件失败: {e}")
+            SERVER_CONFIG["serverinfo"]["server_notice"] = "暂无公告"
+            db.announcements = ["暂无公告"]  # 更新这里
 
     def parse_soap_response(self, xml_string):
         """解析SOAP响应，提取result内容或错误信息"""
@@ -624,6 +629,57 @@ class ServerUI(QMainWindow):
         self.log_message(f"执行命令: {command}")
         self.log_message(f"执行结果: {result}")
         return result
+
+    def setup_server_status_monitor(self):
+        """设置服务器状态监控"""
+        self.status_timer = QTimer()
+        self.status_timer.timeout.connect(self.check_server_status)
+        self.status_timer.start(10000)  # 每10秒检查一次
+        # 立即执行一次检查
+        QTimer.singleShot(0, self.check_server_status)
+        
+    def check_server_status(self):
+        """检查游戏服务器状态"""
+        if not self.server_running:
+            return
+            
+        result = self.execute_soap_command("server info")
+        if "SOAP错误" in result or "连接错误" in result:
+            SERVER_CONFIG["serverinfo"]["gameserver_online"] = False
+            SERVER_CONFIG["serverinfo"]["online_count"] = 0
+            self.log_message("游戏服务器离线")
+        else:
+            try:
+                # 解析在线人数信息
+                # 示例响应: "Players online: 4 (0 queued). Max online: 4 (0 queued)."
+                if "Players online:" in result:
+                    SERVER_CONFIG["serverinfo"]["gameserver_online"] = True
+                    # 提取当前在线人数
+                    online_count = int(result.split("Players online:")[1].split("(")[0].strip())
+                    SERVER_CONFIG["serverinfo"]["online_count"] = online_count
+                    self.log_message(f"游戏服务器在线，当前在线人数: {online_count}")
+                else:
+                    SERVER_CONFIG["serverinfo"]["gameserver_online"] = False
+                    SERVER_CONFIG["serverinfo"]["online_count"] = 0
+                    self.log_message("无法解析服务器状态信息")
+            except Exception as e:
+                SERVER_CONFIG["serverinfo"]["gameserver_online"] = False
+                SERVER_CONFIG["serverinfo"]["online_count"] = 0
+                self.log_message(f"解析服务器状态失败: {str(e)}")
+        
+        # 更新状态显示
+        self.update_status_display()
+        
+    def update_status_display(self):
+        """更新状态显示"""
+        if SERVER_CONFIG["serverinfo"]["gameserver_online"]:
+            status = "运行中"
+            online_count = SERVER_CONFIG["serverinfo"]["online_count"]
+        else:
+            status = "离线"
+            online_count = 0
+            
+        self.status_label.setText(f"服务器状态: {status} | 在线人数: {online_count}")
 
 if __name__ == "__main__":
     # 将QApplication实例命名为qt_app
