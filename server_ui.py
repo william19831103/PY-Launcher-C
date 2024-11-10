@@ -195,11 +195,20 @@ async def handle_request(request: Request):
 async def get_server_info():
     """获取服务器信息"""
     try:
+        # 从G.txt读取公告
+        try:
+            with open('G.txt', 'r', encoding='utf-8') as f:
+                announcements = [line.strip() for line in f.readlines() if line.strip()]
+        except Exception as e:
+            announcements = ["暂无公告"]
+            
         server_info = {
             "wow_ip": SERVER_CONFIG["serverinfo"]["ip"],
             "wow_port": SERVER_CONFIG["serverinfo"]["port"],
             "login_title": SERVER_CONFIG["serverinfo"]["title"],
-            "server_notice": SERVER_CONFIG["serverinfo"]["server_notice"]
+            "gameserver_online": SERVER_CONFIG["serverinfo"]["gameserver_online"],
+            "online_count": SERVER_CONFIG["serverinfo"]["online_count"],
+            "announcements": announcements  # 使用统一的格式
         }
         return JSONResponse(content=server_info)
         

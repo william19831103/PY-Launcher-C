@@ -14,7 +14,7 @@ DEFAULT_CONFIG = {
         "title": "无限魔兽",
         "gameserver_online": False,
         "online_count": 0,
-        "server_notice":"1. 欢迎来到无限魔兽！ |n2. 新服务器将于下周开放 |n3. 当前版本: 1.12.3"
+        "server_notice": ""
     },
     "soap": {
         "ip": "127.0.0.1",
