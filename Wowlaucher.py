@@ -442,20 +442,49 @@ class WowLauncher(QMainWindow):
             client_root = os.path.dirname(os.path.abspath(__file__))
             self.log_message(f"客户端目录: {client_root}")
 
-            # 获取服务器文件列表
+            # 获取服务器文件列表和更新选项
             async with aiohttp.ClientSession() as session:
                 async with session.get("http://localhost:8080/check_update") as response:
                     if response.status == 200:
-                        server_files = (await response.json())["files"]
+                        data = await response.json()
+                        server_files = data["files"]
+                        root_files = data["root_files"]
+                        force_update_wow = data.get("force_update_wow", False)
+                        force_clean_mpq = data.get("force_clean_mpq", False)
+                        mpq_whitelist = set(data.get("mpq_whitelist", []))  # 获取MPQ白名单
                         self.log_message(f"获取到服务器文件列表: {len(server_files)}个文件")
+                        self.log_message(f"MPQ白名单: {len(mpq_whitelist)}个文件")
+                        self.log_message(f"强制更新WOW.EXE: {'是' if force_update_wow else '否'}")
+                        self.log_message(f"强制删除无关MPQ: {'是' if force_clean_mpq else '否'}")
                     else:
                         raise Exception("获取服务器文件列表失败")
 
             # 检查本地文件
             need_update = []
             total_size = 0
+
+            # 检查所有文件
             for file_path, info in server_files.items():
                 local_path = os.path.join(client_root, file_path)
+                
+                # 如果是根目录的WOW.EXE且启用了强制更新
+                if force_update_wow and file_path.lower() == "wow.exe":
+                    # 即使启用强制更新，也进行文件比对
+                    if not os.path.exists(local_path):
+                        self.log_message(f"发现新文件: {file_path}")
+                        need_update.append(file_path)
+                        total_size += info['size']
+                    else:
+                        local_hash = await self.get_file_hash(Path(local_path))
+                        if local_hash != info['hash']:
+                            self.log_message(f"WOW.EXE需要更新 (强制更新模式)")
+                            need_update.append(file_path)
+                            total_size += info['size']
+                        else:
+                            self.log_message("WOW.EXE已是最新版本，无需更新")
+                    continue
+
+                # 检查其他文件
                 if not os.path.exists(local_path):
                     self.log_message(f"发现新文件: {file_path}")
                     need_update.append(file_path)
@@ -467,6 +496,25 @@ class WowLauncher(QMainWindow):
                         self.log_message(f"文件需要更新: {file_path}")
                         need_update.append(file_path)
                         total_size += info['size']
+
+            # 如果启用了强制删除无关MPQ
+            if force_clean_mpq:
+                self.log_message("检查无关MPQ文件...")
+                data_dir = os.path.join(client_root, "Data")
+                if os.path.exists(data_dir):
+                    for file in os.listdir(data_dir):
+                        if file.lower().endswith('.mpq'):
+                            file_lower = file.lower()
+                            # 检查文件是否在白名单中
+                            if file_lower not in mpq_whitelist:
+                                full_path = os.path.join(data_dir, file)
+                                try:
+                                    os.remove(full_path)
+                                    self.log_message(f"删除无关MPQ文件: {file}")
+                                except Exception as e:
+                                    self.log_message(f"删除文件失败 {file}: {str(e)}")
+                            else:
+                                self.log_message(f"保留白名单MPQ文件: {file}")
 
             if not need_update:
                 self.progress.hide()
@@ -769,7 +817,7 @@ class RegisterDialog(QDialog):
         btn_layout.setSpacing(20)
         self.main_layout.addLayout(btn_layout)
         
-        # 连接按钮信号
+        # 连接按钮号
         self.confirm_btn.clicked.connect(self.accept)
         self.cancel_btn.clicked.connect(self.reject)
         

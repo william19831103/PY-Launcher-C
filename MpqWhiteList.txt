@@ -1,0 +1,15 @@
+texture.MPQ
+patch-2.MPQ
+backup.MPQ
+patch.MPQ
+wmo.MPQ
+terrain.MPQ
+speech2.MPQ
+speech.MPQ
+sound.MPQ
+model.MPQ
+misc.MPQ
+dbc.MPQ
+interface.MPQ
+base.MPQ
+fonts.MPQ

@@ -124,7 +124,7 @@ async def handle_request(request: Request):
             security_pwd = data["security_password"]
             
             if db.add_account(account, password, security_pwd):
-                return JSONResponse(content={"success": True, "message": "注册成功"})
+                return JSONResponse(content={"success": True, "message": "册成功"})
             else:
                 return JSONResponse(
                     status_code=400,
@@ -225,13 +225,14 @@ class ServerUI(QMainWindow):
         super().__init__()
         self.server_thread = None
         self.server_running = False
+        self.download_path = "Download"
         self.setup_ui()
+        self.ensure_download_dir()
+        self.mpq_whitelist = self.load_mpq_whitelist()
         self.load_saved_config()
         self.load_announcements()
         self.setup_announcement_monitor()
         self.setup_server_status_monitor()
-        self.download_path = "Download"  # 服务器下载目录
-        self.ensure_download_dir()
         
     def setup_ui(self):
         # 设置窗口基本属性
@@ -301,7 +302,7 @@ class ServerUI(QMainWindow):
         config_layout = QGridLayout()
 
         # 登录端口
-        config_layout.addWidget(QLabel("登录器端口:"), 0, 0)
+        config_layout.addWidget(QLabel("登录端口:"), 0, 0)
         self.login_port = QLineEdit("8080")
         self.login_port.setFixedWidth(100)
         config_layout.addWidget(self.login_port, 0, 1)
@@ -318,9 +319,9 @@ class ServerUI(QMainWindow):
         self.wow_port.setFixedWidth(100)
         config_layout.addWidget(self.wow_port, 2, 1)
 
-        # 服务器名称
+        # 登录器标题
         config_layout.addWidget(QLabel("服务器名称:"), 3, 0)
-        self.server_title = QLineEdit("无限火力魔兽")
+        self.server_title = QLineEdit("哈哈魔兽")
         self.server_title.setFixedWidth(200)
         config_layout.addWidget(self.server_title, 3, 1)
 
@@ -347,6 +348,50 @@ class ServerUI(QMainWindow):
         self.soap_pass = QLineEdit("1")
         self.soap_pass.setFixedWidth(100)
         config_layout.addWidget(self.soap_pass, 3, 3)
+
+        # 添加强制更新选项
+        self.force_wow_check = QCheckBox("强制更新WOW.EXE")
+        self.force_wow_check.setStyleSheet("""
+            QCheckBox {
+                color: white;
+                font-size: 14px;
+            }
+            QCheckBox::indicator {
+                width: 20px;
+                height: 20px;
+            }
+            QCheckBox::indicator:unchecked {
+                border: 2px solid #3498db;
+                background: transparent;
+            }
+            QCheckBox::indicator:checked {
+                border: 2px solid #3498db;
+                background: #3498db;
+            }
+        """)
+        config_layout.addWidget(self.force_wow_check, 4, 0, 1, 2)
+
+        # 添加强制删除选项
+        self.force_mpq_check = QCheckBox("强制删除无关MPQ")
+        self.force_mpq_check.setStyleSheet("""
+            QCheckBox {
+                color: white;
+                font-size: 14px;
+            }
+            QCheckBox::indicator {
+                width: 20px;
+                height: 20px;
+            }
+            QCheckBox::indicator:unchecked {
+                border: 2px solid #3498db;
+                background: transparent;
+            }
+            QCheckBox::indicator:checked {
+                border: 2px solid #3498db;
+                background: #3498db;
+            }
+        """)
+        config_layout.addWidget(self.force_mpq_check, 4, 2, 1, 2)
 
         config_group.setLayout(config_layout)
         layout.addWidget(config_group)
@@ -384,12 +429,112 @@ class ServerUI(QMainWindow):
         save_btn.clicked.connect(self.save_current_config)
         status_layout.addWidget(save_btn)
         
-        # 添加启动服���按钮
+        # 添加启动服务按钮
         self.start_btn = QPushButton("启动服务")
         self.start_btn.clicked.connect(self.toggle_server)
         status_layout.addWidget(self.start_btn)
         
         layout.addLayout(status_layout)
+
+        # 在功能按钮区域上方添加选项
+        options_container = QWidget(self)
+        options_container.setGeometry(60, 640, 1108, 40)  # 调整位置
+        options_layout = QHBoxLayout(options_container)
+        options_layout.setSpacing(30)
+
+        # 强制更新WOW.EXE选项
+        self.force_wow_check = QCheckBox("强制更新WOW.EXE", options_container)
+        self.force_wow_check.setStyleSheet("""
+            QCheckBox {
+                color: white;
+                font-size: 14px;
+            }
+            QCheckBox::indicator {
+                width: 20px;
+                height: 20px;
+            }
+            QCheckBox::indicator:unchecked {
+                border: 2px solid #3498db;
+                background: transparent;
+            }
+            QCheckBox::indicator:checked {
+                border: 2px solid #3498db;
+                background: #3498db;
+            }
+        """)
+        self.force_wow_check.stateChanged.connect(self.on_force_wow_changed)
+        options_layout.addWidget(self.force_wow_check)
+
+        # 强制删除无关MPQ选项
+        self.force_mpq_check = QCheckBox("强制删除无关MPQ", options_container)
+        self.force_mpq_check.setStyleSheet("""
+            QCheckBox {
+                color: white;
+                font-size: 14px;
+            }
+            QCheckBox::indicator {
+                width: 20px;
+                height: 20px;
+            }
+            QCheckBox::indicator:unchecked {
+                border: 2px solid #3498db;
+                background: transparent;
+            }
+            QCheckBox::indicator:checked {
+                border: 2px solid #3498db;
+                background: #3498db;
+            }
+        """)
+        self.force_mpq_check.stateChanged.connect(self.on_force_mpq_changed)
+        options_layout.addWidget(self.force_mpq_check)
+
+        options_layout.addStretch()
+
+        # 功能按钮区域
+        self.button_container = QWidget(self)        
+        self.button_container.setGeometry(60, 690, 1108, 50)  # 调整位置
+        button_layout = QHBoxLayout(self.button_container)
+        button_layout.setSpacing(30)
+        
+        # 创建三个带背景的按钮容器
+        for text in ["账号管理", "游戏商城", "检查更新"]:
+            # 创建按钮容器
+            btn_frame = QFrame(self.button_container)
+            btn_frame.setFixedSize(220, 40)
+            btn_frame.setStyleSheet("""
+                QFrame {
+                    background-color: rgba(41, 128, 185, 0.8);
+                    border-radius: 5px;
+                }
+            """)
+            
+            # 在容器内创建按钮
+            btn = QPushButton(text, btn_frame)
+            btn.setGeometry(0, 0, 220, 40)  # 填满容器
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: transparent;
+                    color: white;
+                    border: none;
+                    font-size: 18px;
+                    font-weight: bold;    
+                }
+                QPushButton:hover {
+                    background-color: rgba(52, 152, 219, 0.3);
+                }
+            """)
+            
+            # 设置按钮文字居中
+            btn.setFixedSize(220, 50)
+            
+            if text == "账号管理":
+                self.register_btn = btn
+            elif text == "游戏商城":
+                self.shop_btn = btn
+            else:
+                self.update_btn = btn
+                
+            button_layout.addWidget(btn_frame)
 
     def log_message(self, message):
         """添加日志消息"""
@@ -547,7 +692,7 @@ class ServerUI(QMainWindow):
                 notice = " |n".join(f"{i+1}. {line}" for i, line in enumerate(lines))
                 # 更新配置
                 SERVER_CONFIG["serverinfo"]["server_notice"] = notice
-                # 同时更新数据库中的公告
+                # 同时更新据库中的公告
                 db.announcements = lines  # 更新这里
                 self.log_message("公告已更新:")
                 self.log_message(notice)
@@ -738,38 +883,111 @@ class ServerUI(QMainWindow):
             self.log_message(f"扫描目录失败: {str(e)}")
         return files_info
 
+    def on_force_wow_changed(self, state):
+        """强制更新WOW.EXE选项改变处理"""
+        self.force_update_wow = bool(state)
+        self.log_message(f"强制更新WOW.EXE: {'开启' if self.force_update_wow else '关闭'}")
+        SERVER_CONFIG["serverinfo"]["force_update_wow"] = self.force_update_wow
+        save_config(SERVER_CONFIG)
+
+    def on_force_mpq_changed(self, state):
+        """强制删除无关MPQ���项改变处理"""
+        self.force_clean_mpq = bool(state)
+        self.log_message(f"强制删除无关MPQ: {'开启' if self.force_clean_mpq else '关闭'}")
+        SERVER_CONFIG["serverinfo"]["force_clean_mpq"] = self.force_clean_mpq
+        save_config(SERVER_CONFIG)
+
+    def load_mpq_whitelist(self):
+        """加载MPQ白名单"""
+        whitelist = set()
+        try:
+            with open('MpqWhiteList.txt', 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        whitelist.add(line.lower())
+            self.log_message(f"已加载MPQ白名单: {len(whitelist)}个文件")
+        except Exception as e:
+            self.log_message(f"加载MPQ白名单失败: {str(e)}")
+        return whitelist
+
+    def get_server_mpq_files(self):
+        """获取服务器Data目录下的MPQ文件"""
+        mpq_files = set()
+        data_path = os.path.join(self.download_path, "Data")
+        if os.path.exists(data_path):
+            for file in os.listdir(data_path):
+                if file.lower().endswith('.mpq'):
+                    mpq_files.add(file.lower())
+        return mpq_files
+
 # 添加新的API路由
 @api_app.get("/check_update")
 async def check_update():
     """获取服务器文件列表"""
     try:
-        # 获取Download目录的绝对路径
         download_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Download")
         print(f"扫描目录: {download_path}")
         
         files_info = {}
+        root_files = {}
+        
+        # 获取MPQ白名单
+        mpq_whitelist = set()
+        try:
+            with open('MpqWhiteList.txt', 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        mpq_whitelist.add(line.lower())
+        except Exception as e:
+            print(f"加载MPQ白名单失败: {str(e)}")
+
+        # 获取服务器Data目录下的MPQ文件
+        server_mpq_files = set()
+        data_path = os.path.join(download_path, "Data")
+        if os.path.exists(data_path):
+            for file in os.listdir(data_path):
+                if file.lower().endswith('.mpq'):
+                    server_mpq_files.add(file.lower())
+
+        # 合并白名单
+        complete_whitelist = mpq_whitelist.union(server_mpq_files)
+        print(f"完整MPQ白名单: {complete_whitelist}")
+
         # 扫描Download目录
         for root, _, files in os.walk(download_path):
             for file in files:
                 full_path = os.path.join(root, file)
-                # 获取相对于Download目录的路径
                 relative_path = os.path.relpath(full_path, download_path)
-                # 统一使用正斜杠
                 relative_path = relative_path.replace('\\', '/')
                 
                 print(f"发现文件: {relative_path}")
                 
-                with open(full_path, 'rb') as f:
-                    md5_hash = hashlib.md5()
-                    for chunk in iter(lambda: f.read(4096), b''):
-                        md5_hash.update(chunk)
-                files_info[relative_path] = {
-                    'hash': md5_hash.hexdigest(),
+                file_info = {
+                    'hash': hashlib.md5(open(full_path, 'rb').read()).hexdigest(),
                     'size': os.path.getsize(full_path)
                 }
-        
-        print(f"文件列表: {files_info}")
-        return JSONResponse(content={"files": files_info})
+
+                if '/' not in relative_path:
+                    root_files[relative_path] = file_info
+                files_info[relative_path] = file_info
+
+        # 确保配置中存在所需的键
+        if "serverinfo" not in SERVER_CONFIG:
+            SERVER_CONFIG["serverinfo"] = {}
+        if "force_update_wow" not in SERVER_CONFIG["serverinfo"]:
+            SERVER_CONFIG["serverinfo"]["force_update_wow"] = False
+        if "force_clean_mpq" not in SERVER_CONFIG["serverinfo"]:
+            SERVER_CONFIG["serverinfo"]["force_clean_mpq"] = False
+
+        return JSONResponse(content={
+            "files": files_info,
+            "root_files": root_files,
+            "force_update_wow": SERVER_CONFIG["serverinfo"].get("force_update_wow", False),
+            "force_clean_mpq": SERVER_CONFIG["serverinfo"].get("force_clean_mpq", False),
+            "mpq_whitelist": list(complete_whitelist)
+        })
     except Exception as e:
         print(f"获取文件列表失败: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

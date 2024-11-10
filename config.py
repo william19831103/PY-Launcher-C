@@ -14,7 +14,8 @@ DEFAULT_CONFIG = {
         "title": "无限魔兽",
         "gameserver_online": False,
         "online_count": 0,
-        "server_notice": ""
+        "force_update_wow": False,
+        "force_clean_mpq": False
     },
     "soap": {
         "ip": "127.0.0.1",
