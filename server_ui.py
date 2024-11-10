@@ -208,7 +208,8 @@ async def get_server_info():
             "login_title": SERVER_CONFIG["serverinfo"]["title"],
             "gameserver_online": SERVER_CONFIG["serverinfo"]["gameserver_online"],
             "online_count": SERVER_CONFIG["serverinfo"]["online_count"],
-            "announcements": announcements  # 使用统一的格式
+            "status": "正常运行" if SERVER_CONFIG["serverinfo"]["gameserver_online"] else "离线",  # 添加状态
+            "announcements": announcements
         }
         return JSONResponse(content=server_info)
         
@@ -231,7 +232,7 @@ class ServerUI(QMainWindow):
         self.setWindowTitle("无限魔兽服务器管理")
         self.setFixedSize(800, 600)
         
-        # 设���窗口样式
+        # 设窗口样式
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #1a1a1a;

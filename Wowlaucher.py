@@ -17,7 +17,7 @@ class WowLauncher(QMainWindow):
     def __init__(self):
         super().__init__()
         # 设置窗口标题和大小
-        self.setWindowTitle("无限魔兽")
+        self.setWindowTitle("连接中...")  # 初始标题，等待从服务器获取
         self.setFixedSize(1228, 921)
         
         # 添加背景图片
@@ -59,28 +59,65 @@ class WowLauncher(QMainWindow):
         
         self.setup_ui()
         
+        # 启动时立即获取服务器信息和状态
+        asyncio.run(self.initial_update())  # 使用asyncio.run执行异步初始化
+        
         # 创建定时器定期更新服务器状态
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_server_status)
-        self.timer.start(30000)
+        self.timer.start(30000)  # 每30秒更新一次
+
+    async def initial_update(self):
+        """启动时的初始更新"""
+        try:
+            # 先获取服务器状态
+            response = await self.send_request(Opcodes.SERVER_STATUS)
+            if response:
+                # 更新状态和在线人数
+                server_status = response.get('status', '未知')  # 获取服务器返回的状态
+                online_count = response.get('online_count', 0)
+                
+                status = f"服务器状态: {server_status}\n"  # 使用服务器返回的状态
+                status += f"在线人数: {online_count}\n\n"
+                status += "公告：\n"
+                
+                # 处理公告内容
+                announcements = response.get('announcements', ['暂无公告'])
+                for announcement in announcements:
+                    status += f"{announcement}\n"
+                    
+                # 立即更新显示
+                self.info_box.setText(status)
+                
+            # 再获取服务器信息
+            server_info = await self.get_server_info()
+            if server_info:
+                # 更新标题
+                title = server_info.get("login_title", "无限魔兽")
+                self.setWindowTitle(title)
+                self.title_label.setText(title)
+                
+        except Exception as e:
+            print(f"初始化更新失败: {str(e)}")
+            self.info_box.setText("无法获取服务器信息")
 
     def setup_ui(self):
         # 标题文字放大300%
-        title = QLabel("无限魔兽", self)
-        title.setGeometry(0, -50, 1228, 200)  # 增加高度以适应更大的字体
-        title.setStyleSheet("""
+        self.title_label = QLabel("连接中...", self)  # 初始标题，等待从服务器获取
+        self.title_label.setGeometry(0, -50, 1228, 200)  # 增加高度以适应更大的字体
+        self.title_label.setStyleSheet("""
             font-size: 64px;  /* 84px * 1 */
             color: white;
             font-weight: bold;
         """)
-        title.setAlignment(Qt.AlignCenter)
+        self.title_label.setAlignment(Qt.AlignCenter)
         
         # 添加阴影效果
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(30)
         shadow.setColor(QColor(0, 128, 255, 180))  # 设置阴影颜色
         shadow.setOffset(0, 0)
-        title.setGraphicsEffect(shadow)
+        self.title_label.setGraphicsEffect(shadow)
 
         
         # 创建中央部件，调整位置和大小
@@ -306,14 +343,20 @@ class WowLauncher(QMainWindow):
         try:
             response = asyncio.run(self.send_request(Opcodes.SERVER_STATUS))
             if response:
-                status = f"服务器状态: {response.get('status', '未知')}\n"
-                status += f"在线人数: {response.get('online_count', 0)}\n\n"
+                # 更新状态和在线人数
+                server_status = response.get('status', '未知')  # 获取服务器返回的状态
+                online_count = response.get('online_count', 0)
+                
+                status = f"服务器状态: {server_status}\n"  # 使用服务器返回的状态
+                status += f"在线人数: {online_count}\n\n"
+                status += "公告：\n"
                 
                 # 处理公告内容
                 announcements = response.get('announcements', ['暂无公告'])
-                for i, announcement in enumerate(announcements, 1):
-                    status += f"{i}. {announcement}\n"
+                for announcement in announcements:
+                    status += f"{announcement}\n"
                     
+                # 立即更新显示
                 self.info_box.setText(status)
         except Exception as e:
             print(f"更新服务器状态失败: {str(e)}")
@@ -414,14 +457,29 @@ class WowLauncher(QMainWindow):
 
     def update_server_info(self, server_info):
         """更新服务器信息到UI"""
-        # 设置标题
-        self.setWindowTitle(server_info["login_title"])
-        
-        # 更新公告
-        server_notice = server_info.get("server_notice", "暂无公告")
-        # 将 |n 替换为实际的换行符
-        server_notice = server_notice.replace(" |n", "\n")
-        self.info_box.setText(server_notice)
+        try:
+            # 设置窗口标题和标签标题
+            title = server_info.get("login_title", "无限魔兽")
+            self.setWindowTitle(title)
+            self.title_label.setText(title)
+            
+            # 更新状态和在线人数
+            server_status = server_info.get('status', '未知')  # 从服务器信息中获取状态
+            online_count = server_info.get('online_count', 0)
+            
+            status = f"服务器状态: {server_status}\n"
+            status += f"在线人数: {online_count}\n\n"
+            status += "公告：\n"
+            
+            # 更新公告
+            announcements = server_info.get("announcements", ["暂无公告"])
+            for announcement in announcements:
+                status += f"{announcement}\n"
+                
+            # 立即更新显示
+            self.info_box.setText(status)
+        except Exception as e:
+            print(f"更新服务器信息失败: {str(e)}")
 
 class RegisterDialog(QDialog):
     def __init__(self, parent=None):
@@ -510,7 +568,7 @@ class RegisterDialog(QDialog):
         captcha_label = QLabel("随机验证:")
         captcha_label.setFixedWidth(100)  # 与其他标签相同宽度
 
-        # 创建输入框
+        # 创建入框
         self.captcha_input = QLineEdit()
         self.captcha_input.setFixedWidth(250)  # 与其他输入框相同宽度
 
