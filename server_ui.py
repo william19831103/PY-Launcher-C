@@ -93,10 +93,18 @@ async def handle_request(request: Request):
         data = request_data.get("data", {})
         
         if opcode == Opcodes.SERVER_STATUS:
+            # 每次请求时重新读取公告
+            try:
+                with open('G.txt', 'r', encoding='utf-8') as f:
+                    announcements = [line.strip() for line in f.readlines() if line.strip()]
+            except Exception as e:
+                print(f"读取公告文件失败: {e}")
+                announcements = ["暂无公告"]
+            
             return JSONResponse(content={
                 "status": "正常运行" if CONFIG.get("gameserver_online", 0) == 1 else "离线",
                 "online_count": CONFIG.get("online_count", 0),
-                "announcements": db.announcements
+                "announcements": announcements  # 使用刚读取的公告
             })
             
         elif opcode == Opcodes.REGISTER_ACCOUNT:
@@ -162,11 +170,12 @@ async def handle_request(request: Request):
 async def get_server_info():
     """获取服务器信息"""
     try:
-        # 从G.txt读取公告
+        # 每次请求时重新读取公告
         try:
             with open('G.txt', 'r', encoding='utf-8') as f:
                 announcements = [line.strip() for line in f.readlines() if line.strip()]
         except Exception as e:
+            print(f"读取公告文件失败: {e}")
             announcements = ["暂无公告"]
             
         server_info = {
@@ -175,7 +184,7 @@ async def get_server_info():
             "login_title": CONFIG.get("server_title", "无限魔兽"),
             "status": "正常运行" if CONFIG.get("gameserver_online", 0) == 1 else "离线",
             "online_count": CONFIG.get("online_count", 0),
-            "announcements": announcements
+            "announcements": announcements  # 使用刚读取的公告
         }
         return JSONResponse(content=server_info)
         
