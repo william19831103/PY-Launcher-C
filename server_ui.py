@@ -5,19 +5,21 @@ import sys
 import uvicorn
 import threading
 import asyncio
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 from config import SERVER_CONFIG, save_config, load_config
 from network_opcodes import Opcodes
+import os
 
-# FastAPI应用
-app = FastAPI(title="无限魔兽服务器")
+# 将FastAPI应用命名为api_app而不是app
+api_app = FastAPI(title="无限魔兽服务器")
 
 # 允许跨域请求
-app.add_middleware(
+api_app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
@@ -39,6 +41,13 @@ class ChangePasswordRequest(BaseModel):
 class UnlockCharacterRequest(BaseModel):
     account: str
     character_name: str
+
+# 添加服务器信息数据模型
+class ServerInfo(BaseModel):
+    wow_ip: str
+    wow_port: str
+    login_title: str
+    announcements: List[str]
 
 # 模拟数据库
 class Database:
@@ -65,50 +74,88 @@ class Database:
 db = Database()
 
 # API路由
-@app.post("/api")
-async def handle_request(opcode: int, data: dict = None):
+@api_app.post("/api")
+async def handle_request(request: Request):
+    """处理客户端请求"""
     try:
-        if opcode == Opcodes.REGISTER_ACCOUNT:
+        # 获取请求数据
+        request_data = await request.json()
+        print(f"收到请求数据: {request_data}")  # 调试信息
+        
+        opcode = request_data.get("opcode")
+        data = request_data.get("data", {})
+        
+        print(f"操作码: {opcode}")  # 调试信息
+        print(f"数据: {data}")  # 调试信息
+        
+        if not isinstance(opcode, int):
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "无效的操作码"}
+            )
+            
+        if opcode == Opcodes.SERVER_STATUS:
+            # 读取公告文件
+            announcements = []
+            try:
+                with open('G.txt', 'r', encoding='utf-8') as f:
+                    announcements = [line.strip() for line in f.readlines() if line.strip()]
+            except Exception as e:
+                print(f"读取公告文件失败: {e}")
+                announcements = ["暂无公告"]
+
+            return JSONResponse(content={
+                "status": "正常运行",
+                "online_count": db.online_count,
+                "announcements": announcements
+            })
+            
+        elif opcode == Opcodes.REGISTER_ACCOUNT:
             account = data["account"]
             password = data["password"]
             security_pwd = data["security_password"]
             
             if db.add_account(account, password, security_pwd):
-                return {"success": True, "message": "注册成功"}
+                return JSONResponse(content={"success": True, "message": "注册成功"})
             else:
-                raise HTTPException(status_code=400, detail="账号已存在")
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "账号已存在"}
+                )
 
         elif opcode == Opcodes.LOGIN_ACCOUNT:
             account = data["account"]
             password = data["password"]
             
             if account in db.accounts and db.accounts[account]["password"] == password:
-                return {"success": True, "message": "登录成功"}
+                return JSONResponse(content={"success": True, "message": "登录成功"})
             else:
-                raise HTTPException(status_code=401, detail="账号或密码错误")
-
-        elif opcode == Opcodes.SERVER_STATUS:
-            return {
-                "status": "正常运行",
-                "online_count": db.online_count,
-                "announcements": db.announcements
-            }
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "账号或密码错误"}
+                )
 
         elif opcode == Opcodes.CHECK_VERSION:
-            return {
+            return JSONResponse(content={
                 "needs_update": False,
                 "current_version": "3.3.5a",
                 "patch_list": []
-            }
+            })
 
         elif opcode == Opcodes.UNLOCK_CHARACTER:
             account = data["account"]
             character_name = data["character_name"]
             
             if account in db.accounts:
-                return {"success": True, "message": f"角色 {character_name} 已解锁"}
+                return JSONResponse(content={
+                    "success": True,
+                    "message": f"角色 {character_name} 已解锁"
+                })
             else:
-                raise HTTPException(status_code=404, detail="账号不存在")
+                return JSONResponse(
+                    status_code=404,
+                    content={"detail": "账号不存在"}
+                )
 
         elif opcode == Opcodes.CHANGE_PASSWORD:
             account = data["account"]
@@ -117,13 +164,52 @@ async def handle_request(opcode: int, data: dict = None):
             
             if account in db.accounts and db.accounts[account]["password"] == old_password:
                 db.accounts[account]["password"] = new_password
-                return {"success": True, "message": "密码修改成功"}
+                return JSONResponse(content={
+                    "success": True,
+                    "message": "密码修改成功"
+                })
             else:
-                raise HTTPException(status_code=400, detail="原密码错误")
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "原密码错误"}
+                )
 
         else:
-            raise HTTPException(status_code=400, detail="未知的操作码")
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "未知的操作码"}
+            )
 
+    except Exception as e:
+        print(f"处理请求异常: {str(e)}")  # 调试信息
+        return JSONResponse(
+            status_code=500,
+            content={"detail": str(e)}
+        )
+
+@api_app.get("/server_info")
+async def get_server_info():
+    """获取服务器信息"""
+    try:
+        # 读取公告文件
+        announcements = []
+        try:
+            with open('G.txt', 'r', encoding='utf-8') as f:
+                announcements = [line.strip() for line in f.readlines() if line.strip()]
+        except Exception as e:
+            print(f"读取公告文件失败: {e}")
+            announcements = ["暂无公告"]
+
+        # 构建服务器信息
+        server_info = ServerInfo(
+            wow_ip=SERVER_CONFIG["wow"]["ip"],
+            wow_port=SERVER_CONFIG["wow"]["port"],
+            login_title=SERVER_CONFIG["login"]["title"],
+            announcements=announcements
+        )
+        
+        return server_info.dict()
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -133,7 +219,8 @@ class ServerUI(QMainWindow):
         self.server_thread = None
         self.server_running = False
         self.setup_ui()
-        self.load_saved_config()  # 加载保存的配置
+        self.load_saved_config()
+        self.setup_announcement_monitor()
         
     def setup_ui(self):
         # 设置窗口基本属性
@@ -386,9 +473,9 @@ class ServerUI(QMainWindow):
     def run_server(self):
         """在新线程中运行服务器"""
         try:
-            # 使用当前配置启动服务器
+            # 使用api_app替代app
             config = uvicorn.Config(
-                app=app,
+                app=api_app,  # 这里使用新的变量名
                 host=SERVER_CONFIG["server"]["host"],
                 port=int(self.login_port.text()),
                 reload=False,
@@ -408,16 +495,48 @@ class ServerUI(QMainWindow):
             self.start_btn.setText("启动服务")
             self.status_label.setText("服务器状态: 错误")
 
+    def setup_announcement_monitor(self):
+        """设置公告文件监控"""
+        self.announcement_timer = QTimer()
+        self.announcement_timer.timeout.connect(self.check_announcements)
+        self.announcement_timer.start(5000)  # 每5秒检查一次
+        self.last_modified_time = self.get_announcement_modified_time()
+        
+    def get_announcement_modified_time(self):
+        """获取公告文件修改时间"""
+        try:
+            return os.path.getmtime('G.txt')
+        except:
+            return 0
+            
+    def check_announcements(self):
+        """检查公告文件是否更新"""
+        current_time = self.get_announcement_modified_time()
+        if current_time > self.last_modified_time:
+            self.last_modified_time = current_time
+            self.load_announcements()
+            
+    def load_announcements(self):
+        """加载公告内容"""
+        try:
+            with open('G.txt', 'r', encoding='utf-8') as f:
+                announcements = f.read()
+                self.log_message("公告已更新:")
+                self.log_message(announcements)
+        except Exception as e:
+            self.log_message(f"读取公告文件失败: {e}")
+
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
+    # 将QApplication实例命名为qt_app
+    qt_app = QApplication(sys.argv)
     
     # 设置应用程序图标
-    app.setWindowIcon(QIcon("wow_icon.png"))
+    qt_app.setWindowIcon(QIcon("wow_icon.png"))
     
     # 设置全局字体
     font = QFont("Microsoft YaHei", 9)
-    app.setFont(font)
+    qt_app.setFont(font)
     
     window = ServerUI()
     window.show()
-    sys.exit(app.exec_()) 
+    sys.exit(qt_app.exec_()) 

@@ -223,15 +223,41 @@ class WowLauncher(QMainWindow):
         """发送网络请求的通用方法"""
         try:
             async with aiohttp.ClientSession() as session:
-                url = f"http://your-server.com/api"
+                url = f"http://localhost:8080/api"
                 headers = {
                     "Content-Type": "application/json",
-                    "Opcode": str(opcode)
+                    "Accept": "application/json"
                 }
                 
-                async with session.post(url, json=data, headers=headers) as response:
-                    return await response.json()
+                # 构建请求数据
+                request_data = {
+                    "opcode": int(opcode),  # 确保opcode是整数
+                    "data": data if data else {}
+                }
+                
+                print(f"发送请求: {url}")  # 调试信息
+                print(f"请求数据: {request_data}")  # 调试信息
+                
+                async with session.post(url, 
+                                      json=request_data, 
+                                      headers=headers,
+                                      timeout=30) as response:
+                    print(f"响应状态: {response.status}")  # 调试信息
+                    
+                    if response.status == 200:
+                        result = await response.json()
+                        print(f"响应数据: {result}")  # 调试信息
+                        return result
+                    else:
+                        error_text = await response.text()
+                        print(f"错误响应: {error_text}")  # 调试信息
+                        raise Exception(f"请求失败: {error_text}")
+                        
+        except asyncio.TimeoutError:
+            QMessageBox.warning(self, "错误", "服务器连接超时")
+            return None
         except Exception as e:
+            print(f"请求异常: {str(e)}")  # 调试信息
             QMessageBox.warning(self, "错误", f"网络请求失败: {str(e)}")
             return None
 
@@ -278,6 +304,7 @@ class WowLauncher(QMainWindow):
     def update_server_status(self):
         """更新服务器状态"""
         try:
+            # 使用空数据调用服务器状态接口
             response = asyncio.run(self.send_request(Opcodes.SERVER_STATUS))
             if response:
                 status = f"服务器状态: {response.get('status', '未知')}\n"
@@ -290,6 +317,7 @@ class WowLauncher(QMainWindow):
                     
                 self.info_box.setText(status)
         except Exception as e:
+            print(f"更新服务器状态失败: {str(e)}")  # 调试信息
             self.info_box.setText("无法获取服务器状态")
     
     def open_register(self):
@@ -368,6 +396,32 @@ class WowLauncher(QMainWindow):
             subprocess.Popen(wow_path)
         else:
             QMessageBox.warning(self, "错误", "未找到游戏客户端，请确认安装路径正确")
+
+    async def get_server_info(self):
+        """获取服务器信息"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get("http://localhost:8080/server_info") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        # 更新UI
+                        self.update_server_info(data)
+                        return data
+                    else:
+                        raise Exception("获取服务器信息失败")
+        except Exception as e:
+            QMessageBox.warning(self, "错误", f"无法连接到服务器: {str(e)}")
+            return None
+
+    def update_server_info(self, server_info):
+        """更新服务器信息到UI"""
+        # 设置标题
+        self.setWindowTitle(server_info["login_title"])
+        
+        # 更新公告
+        announcements = server_info["announcements"]
+        announcement_text = "\n".join(announcements)
+        self.info_box.setText(announcement_text)
 
 class RegisterDialog(QDialog):
     def __init__(self, parent=None):
