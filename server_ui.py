@@ -112,10 +112,33 @@ async def handle_request(request: Request):
             password = data["password"]
             security_pwd = data["security_password"]
             
-            if db.add_account(account, password, security_pwd):
-                return JSONResponse(content={"success": True, "message": "注册成功"})
-            else:
-                raise HTTPException(status_code=400, detail="账号已存在")
+            # 执行SOAP命令创建账号
+            try:
+                # 创建ServerUI实例来使用soap_client
+                server_ui = ServerUI()
+                command = f"account create {account} {password} {password}"
+                result = server_ui.soap_client(command)
+                
+                # 检查SOAP返回结果
+                if "Account created" in result:
+                    # 将账号信息保存到数据库
+                    db.add_account(account, password, security_pwd)
+                    return JSONResponse(content={
+                        "success": True, 
+                        "message": "注册成功"
+                    })
+                else:
+                    # 处理常见的错误情况
+                    if "already exist" in result:
+                        raise HTTPException(status_code=400, detail="该账号已存在")
+                    elif "name is invalid" in result:
+                        raise HTTPException(status_code=400, detail="账号名称无效")
+                    else:
+                        raise HTTPException(status_code=400, detail=f"注册失败: {result}")
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
 
         elif opcode == Opcodes.LOGIN_ACCOUNT:
             account = data["account"]
@@ -903,7 +926,7 @@ async def check_update():
         # 使用全局白名单
         mpq_whitelist = GLOBAL_MPQ_WHITELIST.copy()
         
-        # 只需要添加服务器Data目录下的MPQ文件到白名单
+        # 只需要添加服务器Data录下的MPQ文件到白名单
         server_data_path = os.path.join(download_path, "Data")
         if os.path.exists(server_data_path):
             for file in os.listdir(server_data_path):

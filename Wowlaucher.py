@@ -23,6 +23,10 @@ class WowLauncher(QMainWindow):
         self.setWindowTitle("连接中...")  # 初始标题，等待从服务器获取
         self.setFixedSize(1228, 921)
         
+        # 创建事件循环
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        
         # 添加背景图片
         self.background = QLabel(self)
         self.background.setGeometry(0, 0, 1228, 921)
@@ -33,37 +37,10 @@ class WowLauncher(QMainWindow):
             Qt.SmoothTransformation
         ))
 
-        self.setStyleSheet
-        ("""
-            QLabel {
-                color: white;
-                font-size: 16px;
-            }
-            QPushButton {
-                background-color: rgba(41, 128, 185, 0.8);
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 5px;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: rgba(52, 152, 219, 0.8);
-            }
-            QTextEdit {
-                background-color: rgba(0, 0, 0, 0.7);
-                color: white;
-                border: 1px solid #3498db;
-                border-radius: 5px;
-                padding: 10px;
-            }
-        """
-        )
-        
         self.setup_ui()
         
         # 启动时立即获取服务器信息和状态
-        asyncio.run(self.initial_update())  # 使用asyncio.run执行异步初始化
+        self.loop.run_until_complete(self.initial_update())
         
         # 创建定时器定期更新服务器状态
         self.timer = QTimer()
@@ -269,37 +246,52 @@ class WowLauncher(QMainWindow):
                     "Accept": "application/json"
                 }
                 
-                # 构建请求数据
                 request_data = {
-                    "opcode": int(opcode),  # 确保opcode是整数
+                    "opcode": int(opcode),
                     "data": data if data else {}
                 }
                 
-                print(f"发送请求: {url}")  # 调试信息
-                print(f"请求数据: {request_data}")  # 调试信息
+                print(f"发送请求: {url}")
+                print(f"请求数据: {request_data}")
                 
                 async with session.post(url, 
                                       json=request_data, 
                                       headers=headers,
                                       timeout=30) as response:
-                    print(f"响应状态: {response.status}")  # 调试信息
+                    print(f"响应状态: {response.status}")
+                    
+                    # 读取响应内容
+                    response_text = await response.text()
+                    print(f"响应内容: {response_text}")
                     
                     if response.status == 200:
-                        result = await response.json()
-                        print(f"响应数据: {result}")  # 调试信息
-                        return result
+                        return await response.json()
                     else:
-                        error_text = await response.text()
-                        print(f"错误响应: {error_text}")  # 调试信息
-                        raise Exception(f"请求失败: {error_text}")
+                        # 尝试解析错误响应
+                        try:
+                            error_data = json.loads(response_text)
+                            # 返回错误信息，而不是抛出异常
+                            return {
+                                "success": False,
+                                "detail": error_data.get("detail", "未知错误")
+                            }
+                        except:
+                            return {
+                                "success": False,
+                                "detail": response_text
+                            }
                         
         except asyncio.TimeoutError:
-            QMessageBox.warning(self, "错误", "服务器连接超时")
-            return None
+            return {
+                "success": False,
+                "detail": "服务器连接超时"
+            }
         except Exception as e:
-            print(f"请求异常: {str(e)}")  # 调试信息
-            QMessageBox.warning(self, "错误", f"网络请求失败: {str(e)}")
-            return None
+            print(f"请求异常: {str(e)}")
+            return {
+                "success": False,
+                "detail": str(e)
+            }
 
     def register_account(self, account, password, security_pwd):
         """注册账号"""
@@ -309,8 +301,7 @@ class WowLauncher(QMainWindow):
             "security_password": security_pwd
         }
         
-        response = asyncio.run(self.send_request(Opcodes.REGISTER_ACCOUNT, data))
-        return response
+        return self.loop.run_until_complete(self.send_request(Opcodes.REGISTER_ACCOUNT, data))
         
     def change_password(self, account, old_password, new_password):
         """修改密码"""
@@ -320,8 +311,7 @@ class WowLauncher(QMainWindow):
             "new_password": new_password
         }
         
-        response = asyncio.run(self.send_request(Opcodes.CHANGE_PASSWORD, data))
-        return response
+        return self.loop.run_until_complete(self.send_request(Opcodes.CHANGE_PASSWORD, data))
         
     def unlock_character(self, account, character_name):
         """角色解卡"""
@@ -330,12 +320,11 @@ class WowLauncher(QMainWindow):
             "character_name": character_name
         }
         
-        response = asyncio.run(self.send_request(Opcodes.UNLOCK_CHARACTER, data))
-        return response
+        return self.loop.run_until_complete(self.send_request(Opcodes.UNLOCK_CHARACTER, data))
         
     def check_client_update(self):
         """检查客户端更新"""
-        response = asyncio.run(self.send_request(Opcodes.CHECK_VERSION))
+        response = self.loop.run_until_complete(self.send_request(Opcodes.CHECK_VERSION))
         if response and response.get("needs_update"):
             patch_list = response.get("patch_list", [])
             return patch_list
@@ -344,25 +333,30 @@ class WowLauncher(QMainWindow):
     def update_server_status(self):
         """更新服务器状态"""
         try:
-            response = asyncio.run(self.send_request(Opcodes.SERVER_STATUS))
+            self.loop.run_until_complete(self._async_update_server_status())
+        except Exception as e:
+            print(f"更新服务器状态失败: {str(e)}")
+            self.info_box.setText("无法获取服务器状态")
+
+    async def _async_update_server_status(self):
+        """异步更新服务器状态"""
+        try:
+            response = await self.send_request(Opcodes.SERVER_STATUS)
             if response:
-                # 更新状态和在线人数
-                server_status = response.get('status', '未知')  # 获取服务器返回的状态
+                server_status = response.get('status', '未知')
                 online_count = response.get('online_count', 0)
                 
-                status = f"服务器状态: {server_status}\n"  # 使用服务器返回的状态
+                status = f"服务器状态: {server_status}\n"
                 status += f"在线人数: {online_count}\n\n"
                 status += "公告：\n"
                 
-                # 处理公告内容
                 announcements = response.get('announcements', ['暂无公告'])
                 for announcement in announcements:
                     status += f"{announcement}\n"
                     
-                # 立即更新显示
                 self.info_box.setText(status)
         except Exception as e:
-            print(f"更新服务器状态失败: {str(e)}")
+            print(f"更新服务器状态失���: {str(e)}")
             self.info_box.setText("无法获取服务器状态")
     
     def open_register(self):
@@ -380,14 +374,8 @@ class WowLauncher(QMainWindow):
             
             # 验证输入
             if not self._validate_register_input(account, password, confirm_pwd, security_pwd, captcha):
-                return
-            
-            # TODO: 发送注册请求到服务器
-            try:
-                # 这里添加与服务器通信的代码
-                QMessageBox.information(self, "成功", "账号注册成功！")
-            except Exception as e:
-                QMessageBox.warning(self, "错误", f"注册失败：{str(e)}")
+                return            
+  
     
     def _validate_register_input(self, account, password, confirm_pwd, security_pwd, captcha):
         """验证注册输入"""
@@ -461,7 +449,7 @@ class WowLauncher(QMainWindow):
                         
                         mpq_whitelist = set(data.get("mpq_whitelist", []))
                         
-                        self.log_message(f"获取到服务器文件列表: {len(server_files)}个文件")
+                        self.log_message(f"获���到服务器文件列表: {len(server_files)}个文件")
                         self.log_message(f"强制更新WOW.EXE: {'是' if force_wow == 1 else '否'}")
                         self.log_message(f"强制删除无关MPQ: {'是' if force_mpq == 1 else '否'}")
                     else:
@@ -663,6 +651,11 @@ class WowLauncher(QMainWindow):
         # 让 Qt 处理事件，立即更新显示
         QApplication.processEvents()
 
+    def closeEvent(self, event):
+        """窗口关闭时清理事件循环"""
+        self.loop.close()
+        super().closeEvent(event)
+
 class RegisterDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -736,7 +729,7 @@ class RegisterDialog(QDialog):
         
         # 创建输入框区域
         self.account_input = self._create_input("账号名称", "4-12位数字和字母")
-        self.password_input = self._create_input("输入密", "4-12位数字和字母")
+        self.password_input = self._create_input("输入密码", "4-12位数字和字母")
         self.confirm_pwd_input = self._create_input("确认密码", "两次输入的密码")
         self.security_pwd_input = self._create_input("安全密码", "1-8位数字和字母")
         
@@ -829,7 +822,7 @@ class RegisterDialog(QDialog):
         btn_layout.setSpacing(20)
         self.main_layout.addLayout(btn_layout)
         
-        # 连按钮号
+        # 连按���号
         self.confirm_btn.clicked.connect(self.accept)
         self.cancel_btn.clicked.connect(self.reject)
         
@@ -861,17 +854,53 @@ class RegisterDialog(QDialog):
         return input_field
 
     def accept(self):
-        account = self.account_input.text()
-        password = self.password_input.text()
-        security_pwd = self.security_pwd_input.text()
-        
-        if self.register_radio.isChecked():
+        """确认按钮点击处理"""
+        try:
+            # 获取输入内容
+            account = self.account_input.text().strip()
+            password = self.password_input.text().strip()
+            confirm_pwd = self.confirm_pwd_input.text().strip()
+            security_pwd = self.security_pwd_input.text().strip()
+            captcha = self.captcha_input.text().strip()
+            
+            # 验证输入
+            if not account or not password or not confirm_pwd or not security_pwd:
+                QMessageBox.warning(self, "错误", "请填写所有必填项")
+                return
+                
+            if len(account) < 4 or len(account) > 12:
+                QMessageBox.warning(self, "错误", "账号长度必须在4-12位之间")
+                return
+                
+            if len(password) < 4 or len(password) > 12:
+                QMessageBox.warning(self, "错误", "密码长度必须在4-12位之间") 
+                return
+                
+            if password != confirm_pwd:
+                QMessageBox.warning(self, "错误", "两次输入的密码不一致")
+                return
+                
+            if len(security_pwd) < 1 or len(security_pwd) > 8:
+                QMessageBox.warning(self, "错误", "安全密码长度必须在1-8位之间")
+                return
+                
+            if not captcha:
+                QMessageBox.warning(self, "错误", "请输入验证码")
+                return
+                
+            # 发送注册请求
             response = self.parent().register_account(account, password, security_pwd)
-            if response and response.get("success"):
-                QMessageBox.information(self, "成功", "账号注册成功！")
-                self.accept()
+            
+            if response.get("success"):
+                QMessageBox.information(self, "成功", "账号注册成功!")
+                super().accept()
             else:
-                QMessageBox.warning(self, "错误", response.get("message", "注册失败"))
+                # 直接使用服务器返回的错误信息
+                error_msg = response.get("detail", "注册失败")
+                QMessageBox.warning(self, "错误", error_msg)
+                
+        except Exception as e:
+            QMessageBox.warning(self, "错误", f"注册失败: {str(e)}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
