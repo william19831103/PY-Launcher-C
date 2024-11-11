@@ -471,7 +471,7 @@ class WowLauncher(QMainWindow):
                 # 处理Wow目录下的文件
                 if file_path.startswith("Wow/"):
                     if force_wow == 1:
-                        # 强制更新Wow目录下的所有文件
+                        # 强制更新Wow目录的所有文件
                         target_path = os.path.join(client_root, file_path.replace("Wow/", ""))
                         self.log_message(f"添加Wow目录文件到更新列表: {file_path}")
                         need_update.append((file_path, target_path))
@@ -713,7 +713,7 @@ class RegisterDialog(QDialog):
         self.main_layout.setContentsMargins(20, 20, 20, 20)
         self.setLayout(self.main_layout)
         
-        # 标题标签 - 红色背景
+        # 标��标签 - 红色背景
         title_container = QWidget()
         title_container.setStyleSheet("background-color: #aa0000;")
         title_container.setFixedHeight(40)
@@ -820,7 +820,7 @@ class RegisterDialog(QDialog):
 
         # 绑定信号到槽函数
         self.register_radio.clicked.connect(lambda: self.radio_clicked(self.register_radio))
-        self.unlock_radio.clicked.connect(lambda: self.radio_clicked(self.unlock_radio))
+        #.radio_clicked(self.unlock_radio))
         self.change_pwd_radio.clicked.connect(lambda: self.radio_clicked(self.change_pwd_radio))
         
         # 服务类型标签
@@ -1136,7 +1136,7 @@ class RegisterDialog(QDialog):
                 return
                 
             if len(password) < 4 or len(password) > 12:
-                QMessageBox.warning(self, "错误", "密码长度必须在4-12位之间") 
+                QMessageBox.warning(self, "错误", "密码长度必须在4-12��之间") 
                 return
                 
             if len(security_pwd) < 1 or len(security_pwd) > 8:
@@ -1155,7 +1155,7 @@ class RegisterDialog(QDialog):
                 return
                 
             # 发送修改密码请求
-            response = self.parent().change_password(account, new_password, security_pwd)
+            response = self.parent().change_password(account, security_pwd, new_password)
             
             if response.get("success"):
                 QMessageBox.information(self, "成功", "密码修改成功!")
@@ -1190,6 +1190,15 @@ class ChangePasswordDialog(QDialog):
                 margin: 2px;
                 height: 32px;
                 font-size: 16px;
+            }
+            QRadioButton {
+                color: white;
+                spacing: 10px;
+                font-size: 16px;
+            }
+            QRadioButton::indicator {
+                width: 18px;
+                height: 18px;
             }
             QPushButton {
                 background-color: #2a2a2a;
@@ -1232,10 +1241,6 @@ class ChangePasswordDialog(QDialog):
         # 创建输入框
         self.account_input = self._create_input("账号名称", "4-12位数字和字母")
         self.account_input.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
-        
-        self.old_password_input = self._create_input("原密码", "当前使用的密码")
-        self.old_password_input.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
-        self.old_password_input.setEchoMode(QLineEdit.Password)
         
         self.new_password_input = self._create_input("新密码", "4-12位数字和字母")
         self.new_password_input.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
@@ -1280,6 +1285,25 @@ class ChangePasswordDialog(QDialog):
         captcha_layout.addStretch()
 
         self.main_layout.addWidget(captcha_container)
+        
+        # 添加单选按钮组
+        radio_layout = QHBoxLayout()
+        radio_layout.setSpacing(30)
+        self.register_radio = QRadioButton("账号注册")
+        self.unlock_radio = QRadioButton("角色解卡")
+        self.change_pwd_radio = QRadioButton("更改密码")
+        
+        # 设置默认选中状态
+        self.change_pwd_radio.setChecked(True)
+        
+        radio_layout.addWidget(self.register_radio)
+        radio_layout.addWidget(self.unlock_radio)
+        radio_layout.addWidget(self.change_pwd_radio)
+        self.main_layout.addLayout(radio_layout)
+
+        # 绑定信号到槽函数
+        self.register_radio.clicked.connect(self.switch_to_register)
+        self.unlock_radio.clicked.connect(self.switch_to_unlock)
         
         # 添加弹性空间
         self.main_layout.addStretch()
@@ -1344,13 +1368,12 @@ class ChangePasswordDialog(QDialog):
     def accept(self):
         try:
             account = self.account_input.text().strip()
-            old_password = self.old_password_input.text().strip()
             new_password = self.new_password_input.text().strip()
             security_pwd = self.security_pwd_input.text().strip()
             captcha = self.captcha_input.text().strip()
             
             # 验证输入
-            if not all([account, old_password, new_password, security_pwd, captcha]):
+            if not all([account, new_password, security_pwd, captcha]):
                 QMessageBox.warning(self, "错误", "请填写所有必填项")
                 return
                 
@@ -1373,7 +1396,7 @@ class ChangePasswordDialog(QDialog):
                 return
                 
             # 发送修改密码请求
-            response = self.parent().change_password(account, old_password, new_password)
+            response = self.parent().change_password(account, security_pwd, new_password)
             
             if response.get("success"):
                 QMessageBox.information(self, "成功", "密码修改成功!")
@@ -1384,6 +1407,19 @@ class ChangePasswordDialog(QDialog):
                 
         except Exception as e:
             QMessageBox.warning(self, "错误", f"修改密码失败: {str(e)}")
+
+    # 添加切换功能的方法
+    def switch_to_register(self):
+        """切换到注册窗口"""
+        self.close()
+        dialog = RegisterDialog(self.parent())
+        dialog.move(self.parent().geometry().center() - dialog.rect().center())
+        dialog.exec_()
+
+    def switch_to_unlock(self):
+        """切换到角色解卡"""
+        QMessageBox.information(self, "提示", "角色解卡功能正在开发中...")
+        self.change_pwd_radio.setChecked(True)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
