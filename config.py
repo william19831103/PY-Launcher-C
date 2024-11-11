@@ -15,7 +15,12 @@ DEFAULT_CONFIG = {
     "soap_user": "1",
     "soap_pass": "1",
     "force_wow": 0,
-    "force_mpq": 0
+    "force_mpq": 0,
+    "mysql_host": "127.0.0.1",
+    "mysql_port": 3306,
+    "mysql_user": "root",
+    "mysql_password": "root",
+    "mysql_database": "realmd"
 }
 
 def save_config(config_data):

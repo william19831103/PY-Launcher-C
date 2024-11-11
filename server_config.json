@@ -15,5 +15,10 @@
     "soap_password": "1",
     "jwt_secret": "your-secret-key",
     "token_expire_minutes": 60,
-    "max_login_attempts": 5
+    "max_login_attempts": 5,
+    "mysql_host": "127.0.0.1",
+    "mysql_port": 3306,
+    "mysql_user": "root",
+    "mysql_password": "root",
+    "mysql_database": "realmd"
 }

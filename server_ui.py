@@ -97,7 +97,16 @@ DB_CONFIG = {
 def get_db_connection():
     """创建数据库连接"""
     try:
-        connection = mysql.connector.connect(**DB_CONFIG)
+        # 从全局配置获取数据库连接信息
+        db_config = {
+            'host': CONFIG.get('mysql_host', '127.0.0.1'),
+            'port': CONFIG.get('mysql_port', 3306),
+            'user': CONFIG.get('mysql_user', 'root'),
+            'password': CONFIG.get('mysql_password', 'root'),
+            'database': CONFIG.get('mysql_database', 'realmd')
+        }
+        
+        connection = mysql.connector.connect(**db_config)
         if connection.is_connected():
             print("成功连接到MySQL数据库")
             return connection
@@ -419,6 +428,39 @@ class ServerUI(QMainWindow):
         self.force_mpq.setFixedWidth(100)
         config_layout.addWidget(self.force_mpq, 4, 3)
 
+        # 在服务器配置区域添加数据库配置
+        config_layout.addWidget(QLabel("MySQL配置"), 5, 0, 1, 4)  # 添加标题
+        
+        # MySQL主机
+        config_layout.addWidget(QLabel("MySQL主机:"), 6, 0)
+        self.mysql_host = QLineEdit()
+        self.mysql_host.setFixedWidth(100)
+        config_layout.addWidget(self.mysql_host, 6, 1)
+
+        # MySQL端口
+        config_layout.addWidget(QLabel("MySQL端口:"), 6, 2)
+        self.mysql_port = QLineEdit()
+        self.mysql_port.setFixedWidth(100)
+        config_layout.addWidget(self.mysql_port, 6, 3)
+
+        # MySQL用户名
+        config_layout.addWidget(QLabel("MySQL用户名:"), 7, 0)
+        self.mysql_user = QLineEdit()
+        self.mysql_user.setFixedWidth(100)
+        config_layout.addWidget(self.mysql_user, 7, 1)
+
+        # MySQL密码
+        config_layout.addWidget(QLabel("MySQL密码:"), 7, 2)
+        self.mysql_pass = QLineEdit()
+        self.mysql_pass.setFixedWidth(100)
+        config_layout.addWidget(self.mysql_pass, 7, 3)
+
+        # MySQL数据库名
+        config_layout.addWidget(QLabel("数据库名:"), 8, 0)
+        self.mysql_database = QLineEdit()
+        self.mysql_database.setFixedWidth(100)
+        config_layout.addWidget(self.mysql_database, 8, 1)
+
         config_group.setLayout(config_layout)
         layout.addWidget(config_group)
 
@@ -626,7 +668,7 @@ class ServerUI(QMainWindow):
         """加载保存的配置"""
         config = CONFIG  # 使用全局配置对象
         
-        # 从扁平��配置中加载值
+        # 从扁平化配置中加载值
         self.login_port.setText(str(config.get("server_port", 8080)))
         self.wow_ip.setText(config.get("wow_ip", "127.0.0.1"))
         self.wow_port.setText(str(config.get("wow_port", "3724")))
@@ -637,6 +679,13 @@ class ServerUI(QMainWindow):
         self.soap_pass.setText(config.get("soap_password", "1"))
         self.force_wow.setText(str(config.get("force_wow", 0)))
         self.force_mpq.setText(str(config.get("force_mpq", 0)))
+        
+        # 加载MySQL配置
+        self.mysql_host.setText(config.get("mysql_host", "127.0.0.1"))
+        self.mysql_port.setText(str(config.get("mysql_port", 3306)))
+        self.mysql_user.setText(config.get("mysql_user", "root"))
+        self.mysql_pass.setText(config.get("mysql_password", "root"))
+        self.mysql_database.setText(config.get("mysql_database", "realmd"))
         
         self.log_message("配置已加载")
 
@@ -664,7 +713,13 @@ class ServerUI(QMainWindow):
                 
                 "jwt_secret": CONFIG.get("jwt_secret", "your-secret-key"),
                 "token_expire_minutes": CONFIG.get("token_expire_minutes", 60),
-                "max_login_attempts": CONFIG.get("max_login_attempts", 5)
+                "max_login_attempts": CONFIG.get("max_login_attempts", 5),
+                
+                "mysql_host": self.mysql_host.text(),
+                "mysql_port": int(self.mysql_port.text()),
+                "mysql_user": self.mysql_user.text(),
+                "mysql_password": self.mysql_pass.text(),
+                "mysql_database": self.mysql_database.text(),
             }
             
             # 打印要保存的配置
@@ -676,6 +731,16 @@ class ServerUI(QMainWindow):
                 # 更新全局配置
                 CONFIG.clear()
                 CONFIG.update(config)
+                
+                # 更新数据库连接配置
+                global DB_CONFIG
+                DB_CONFIG.update({
+                    'host': config['mysql_host'],
+                    'port': config['mysql_port'],
+                    'user': config['mysql_user'],
+                    'password': config['mysql_password'],
+                    'database': config['mysql_database']
+                })
                 
                 self.log_message("配置已保存")
                 QMessageBox.information(self, "成功", "配置已保存")
@@ -735,7 +800,7 @@ class ServerUI(QMainWindow):
                 lines = [line.strip() for line in f.readlines() if line.strip()]
                 # 使用 |n 连接所有行
                 notice = " |n".join(f"{i+1}. {line}" for i, line in enumerate(lines))
-                # 更新配置
+                # 更配置
                 CONFIG["serverinfo"]["server_notice"] = notice
                 # 同时更新据库中的公告
                 db.announcements = lines  # 更新这里
@@ -1100,7 +1165,7 @@ async def download_file(file_path: str):
         # 构建完整的文件路径
         full_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Download", file_path)
         
-        print(f"请求下载文件: {file_path}")
+        print(f"请��下载文件: {file_path}")
         print(f"完整路径: {full_path}")
         
         if os.path.exists(full_path) and os.path.isfile(full_path):
