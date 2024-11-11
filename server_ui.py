@@ -183,7 +183,14 @@ async def handle_request(request: Request):
                 # 检查SOAP返回结果
                 if "Account created" in result:
                     # 获取新创建的账号ID
-                    account_id = get_account_id(account)
+ 
+                    # 尝试最多3次获取账号ID,每次间隔0.3秒
+                    account_id = None
+                    for _ in range(3):
+                        account_id = get_account_id(account)
+                        if account_id:
+                            break
+                        await asyncio.sleep(0.3)
                     if account_id:
                         # 更新安全密码
                         if update_account_security_pwd(account_id, security_pwd):
@@ -196,7 +203,7 @@ async def handle_request(request: Request):
                         else:
                             raise HTTPException(status_code=500, detail="更新安全密码失败")
                     else:
-                        raise HTTPException(status_code=500, detail="获取账号ID失败")
+                        raise HTTPException(status_code=500, detail="账号注册成功,但是保存安全密码失败,请联系老G")
                 else:
                     # 处理常见的错误情况
                     if "already exist" in result:
