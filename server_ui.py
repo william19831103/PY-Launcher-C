@@ -661,7 +661,7 @@ class ServerUI(QMainWindow):
             xml_string = xml_string.replace('SOAP-ENV:', '').replace('ns1:', '')
             root = ET.fromstring(xml_string)
             
-            # 检���是否存在错误信息
+            # 检是否存在错误信息
             fault = root.find('.//Fault')
             if fault is not None:
                 fault_string = fault.find('faultstring').text
@@ -799,41 +799,6 @@ class ServerUI(QMainWindow):
             
         self.status_label.setText(f"服务器状态: {status} | 在线人数: {online_count}")
 
-    def ensure_download_dir(self):
-        """确保下载目录存在"""
-        if not os.path.exists(self.download_path):
-            os.makedirs(self.download_path)
-            os.makedirs(os.path.join(self.download_path, "Data"))
-
-    def get_file_hash(self, filepath):
-        """获取文件的MD5哈希值"""
-        try:
-            with open(filepath, 'rb') as f:
-                md5_hash = hashlib.md5()
-                for chunk in iter(lambda: f.read(4096), b''):
-                    md5_hash.update(chunk)
-                return md5_hash.hexdigest()
-        except Exception as e:
-            self.log_message(f"计算文件哈希失败 {filepath}: {str(e)}")
-            return None
-
-    def scan_directory(self, directory):
-        """扫描目录获取文件列表和哈希值"""
-        files_info = {}
-        try:
-            for root, _, files in os.walk(directory):
-                for file in files:
-                    full_path = os.path.join(root, file)
-                    relative_path = os.path.relpath(full_path, directory)
-                    file_hash = self.get_file_hash(full_path)
-                    if file_hash:
-                        files_info[relative_path] = {
-                            'hash': file_hash,
-                            'size': os.path.getsize(full_path)
-                        }
-        except Exception as e:
-            self.log_message(f"扫描目录失败: {str(e)}")
-        return files_info
 
     def on_force_mpq_changed(self, text):
         """强制删除无关MPQ选项改变处理"""
@@ -874,16 +839,6 @@ class ServerUI(QMainWindow):
         except Exception as e:
             self.log_message(f"加载MPQ白名单失败: {str(e)}")
         return whitelist
-
-    def get_server_mpq_files(self):
-        """获取服务器Data目录下的MPQ文件"""
-        mpq_files = set()
-        data_path = os.path.join(self.download_path, "Data")
-        if os.path.exists(data_path):
-            for file in os.listdir(data_path):
-                if file.lower().endswith('.mpq'):
-                    mpq_files.add(file.lower())
-        return mpq_files
 
     def on_save_clicked(self):
         """保存按钮点击处理"""
