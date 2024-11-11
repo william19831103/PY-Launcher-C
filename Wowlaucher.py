@@ -611,7 +611,7 @@ class WowLauncher(QMainWindow):
                         self.update_server_info(data)
                         return data
                     else:
-                        raise Exception("获取服务器信息失败")
+                        raise Exception("获取服���器信息失败")
         except Exception as e:
             QMessageBox.warning(self, "错误", f"无法连接到服务器: {str(e)}")
             return None
@@ -661,520 +661,14 @@ class WowLauncher(QMainWindow):
         self.loop.close()
         super().closeEvent(event)
 
-class RegisterDialog(QDialog):
-    def __init__(self, parent=None):
+# 首先创建一个基类
+class BaseServiceDialog(QDialog):
+    def __init__(self, parent=None, title="服务对话框", hint_text="欢迎使用服务"):
         super().__init__(parent)
         self.setWindowTitle("当前分区")
-        self.setFixedSize(550, 550)  # 增加30%的尺寸
-        
-        # 设置窗口背景色和样式
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #1a1a1a;
-            }
-            QLabel {
-                color: #ffffff;
-                font-size: 16px;
-            }
-            QLineEdit {
-                background-color: #2a2a2a;
-                color: white;
-                border: 1px solid #3a3a3a;
-                padding: 8px;
-                margin: 2px;
-                height: 32px;
-                font-size: 16px;
-            }
-            QRadioButton {
-                color: white;
-                spacing: 10px;
-                font-size: 16px;
-            }
-            QRadioButton::indicator {
-                width: 18px;
-                height: 18px;
-            }
-            QRadioButton:disabled {
-                color: #4CAF50;  /* 禁用状态使用绿色 */
-                font-weight: bold;  /* 加粗 */
-            }
-            QPushButton {
-                background-color: #2a2a2a;
-                color: white;
-                border: 1px solid #3a3a3a;
-                padding: 10px 30px;
-                min-width: 120px;
-                font-size: 16px;
-            }
-            QPushButton:hover {
-                background-color: #3a3a3a;
-            }
-        """)
-        
-        # 创建主布局
-        self.main_layout = QVBoxLayout()
-        self.main_layout.setSpacing(20)  # 增加垂直间距
-        self.main_layout.setContentsMargins(20, 20, 20, 20)
-        self.setLayout(self.main_layout)
-        
-        # 标题标签 - 红色背景
-        title_container = QWidget()
-        title_container.setStyleSheet("background-color: #aa0000;")
-        title_container.setFixedHeight(40)
-        title_layout = QHBoxLayout(title_container)
-        title_layout.setContentsMargins(0, 0, 0, 0)
-        
-        title_label = QLabel("[无限魔兽]")
-        title_label.setStyleSheet("color: white; font-size: 22px; font-weight: bold;")
-        title_label.setAlignment(Qt.AlignCenter)
-        title_layout.addWidget(title_label)
-        
-        self.main_layout.addWidget(title_container)
-        
-        # 提示文本
-        hint_label = QLabel("*欢迎使用账号注册服务,请务必牢记账号密码")
-        hint_label.setStyleSheet("color: #00BFFF; font-size: 20px;")
-        self.main_layout.addWidget(hint_label)
-        
-        # 创建输入框区域
-        self.account_input = self._create_input("账号名称", "4-12位数字和字母")
-        self.account_input.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
-        
-        self.password_input = self._create_input("输入密码", "4-12位数字和字母")
-        self.password_input.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
-        
-        self.confirm_pwd_input = self._create_input("确认密码", "两次输入的密")
-        self.confirm_pwd_input.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
-        
-        self.security_pwd_input = self._create_input("安全密码", "1-8位数字和字母")
-        self.security_pwd_input.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
-        
-        # 验证码区域
-        captcha_container = QWidget()
-        captcha_layout = QHBoxLayout(captcha_container)
-        captcha_layout.setContentsMargins(0, 0, 0, 0)
-        captcha_layout.setSpacing(15)
-
-        # 创建左侧标签
-        captcha_label = QLabel("随机验证:")
-        captcha_label.setFixedWidth(100)
-
-        # 创建输入框
-        self.captcha_input = QLineEdit()
-        self.captcha_input.setFixedWidth(250)
-
-        # 创建验证码数字标签
-        self.captcha_number = QLabel()  # 保存为实例变量以便后续访问
-        self.captcha_number.setStyleSheet("""
-            color: #ff0000;
-            font-size: 16px;
-            font-weight: bold;
-            background-color: #333333;
-            padding: 5px 10px;
-            border-radius: 3px;
-        """)
-        
-        # 生成随机验证码
-        self.current_captcha = self.generate_captcha()
-        self.captcha_number.setText(self.current_captcha)
-        
-        # 添加刷新按钮
-        self.refresh_btn = QPushButton("刷新")
-        self.refresh_btn.setFixedWidth(60)
-        self.refresh_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2a2a2a;
-                color: white;
-                border: 1px solid #3a3a3a;
-                padding: 5px;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: #3a3a3a;
-            }
-        """)
-        self.refresh_btn.clicked.connect(self.refresh_captcha)
-
-        # 添加到布局
-        captcha_layout.addWidget(captcha_label)
-        captcha_layout.addWidget(self.captcha_input)
-        captcha_layout.addWidget(self.captcha_number)
-        captcha_layout.addWidget(self.refresh_btn)
-        captcha_layout.addStretch()
-
-        self.main_layout.addWidget(captcha_container)
-
-        # 移除原来的placeholder
-        self.captcha_input.setPlaceholderText("")
-
-        # 单选按钮组
-        radio_layout = QHBoxLayout()
-        radio_layout.setSpacing(30)
-        self.register_radio = QRadioButton("账号注册")
-        self.change_pwd_radio = QRadioButton("更改密码")
-        
-        # 设置默认选中状态并禁用当前选中的按钮
-        self.register_radio.setChecked(True)
-        self.register_radio.setEnabled(False)
-
-        radio_layout.addWidget(self.register_radio)
-        radio_layout.addWidget(self.change_pwd_radio)
-        self.main_layout.addLayout(radio_layout)
-
-        # 绑定信号到槽函数
-        self.change_pwd_radio.clicked.connect(lambda: self.radio_clicked(self.change_pwd_radio))
-        
-        # 服务类型标签
-        service_label = QLabel("服务类型: 账号注册")
-        service_label.setStyleSheet("color: #00BFFF; font-size: 14px;")
-        self.main_layout.addWidget(service_label)
-        
-        # 添加弹性空间
-        self.main_layout.addStretch()
-        
-        # 按钮区域
-        btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(20)  # 设置按钮之间的间距
-        
-        self.confirm_btn = QPushButton("确定")
-        self.cancel_btn = QPushButton("取消")
-        
-        # 设置按钮样式
-        self.confirm_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #0078d7;
-                border: none;
-                color: white;
-                padding: 10px 30px;
-                font-size: 18px;
-                min-width: 120px;
-            }
-            QPushButton:hover {
-                background-color: #1e88e5;
-            }
-        """)
-        
-        self.cancel_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2a2a2a;
-                border: 1px solid #3a3a3a;
-                color: white;
-                padding: 10px 30px;
-                font-size: 18px;
-                min-width: 120px;
-            }
-            QPushButton:hover {
-                background-color: #3a3a3a;
-            }
-        """)
-        
-        btn_layout.addWidget(self.confirm_btn)
-        btn_layout.addWidget(self.cancel_btn)
-        
-        # 将按钮布局添加到主布局
-        self.main_layout.addLayout(btn_layout)
-        
-        # 连接按钮信号
-        self.confirm_btn.clicked.connect(self.accept)
-        self.cancel_btn.clicked.connect(self.reject)
-        
-    def _create_input(self, label_text, placeholder_text):
-        container = QWidget()
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(15)
-        
-        # 创左侧标签
-        label = QLabel(f"{label_text}:")
-        label.setFixedWidth(100)
-        
-        # 创建输入框
-        input_field = QLineEdit()
-        input_field.setFixedWidth(250)
-        
-        # 创建右侧提示文本
-        hint = QLabel(placeholder_text)
-        hint.setStyleSheet("color: #666666; font-size: 14px;")
-        
-        # 添加到布局
-        layout.addWidget(label)
-        layout.addWidget(input_field)
-        layout.addWidget(hint)
-        layout.addStretch()
-        
-        self.main_layout.addWidget(container)
-        return input_field
-
-    def generate_captcha(self):
-        """生成4位随机数字验证码"""
-        import random
-        return ''.join(str(random.randint(0, 9)) for _ in range(4))
-
-    def refresh_captcha(self):
-        """刷新验证码"""
-        self.current_captcha = self.generate_captcha()
-        self.captcha_number.setText(self.current_captcha)
-
-    def accept(self):
-        """确认按钮点击处理"""
-        try:
-            # 获取输入内容
-            account = self.account_input.text().strip()
-            password = self.password_input.text().strip()
-            confirm_pwd = self.confirm_pwd_input.text().strip()
-            security_pwd = self.security_pwd_input.text().strip()
-            captcha = self.captcha_input.text().strip()
-            
-            # 验证输入
-            if not account or not password or not confirm_pwd or not security_pwd:
-                QMessageBox.warning(self, "错误", "请填写所有必填项")
-                return
-            
-            # 验证是否只包含字母和数字
-            if not account.isalnum():
-                QMessageBox.warning(self, "错误", "账号只能包含字母和数字")
-                return
-                
-            if not password.isalnum():
-                QMessageBox.warning(self, "错误", "密码只能包含字母和数字")
-                return
-                
-            if not security_pwd.isalnum():
-                QMessageBox.warning(self, "错误", "安全密码只能包含字母和数字")
-                return
-                
-            if len(account) < 4 or len(account) > 12:
-                QMessageBox.warning(self, "错误", "账号长度必须在4-12位之间")
-                return
-                
-            if len(password) < 4 or len(password) > 12:
-                QMessageBox.warning(self, "错误", "密码长度必须在4-12位之间") 
-                return
-                
-            if password != confirm_pwd:
-                QMessageBox.warning(self, "错误", "两次输入的密码不一致")
-                return
-                
-            if len(security_pwd) < 1 or len(security_pwd) > 8:
-                QMessageBox.warning(self, "错误", "安全密码长度必须在1-8位之间")
-                return
-                
-            if not captcha:
-                QMessageBox.warning(self, "错误", "请输入验证码")
-                return
-
-            # 验证验证码
-            if captcha != self.current_captcha:
-                QMessageBox.warning(self, "错误", "验证码错误")
-                self.refresh_captcha()  # 刷新验证码
-                self.captcha_input.clear()  # 清空输入
-                return
-                
-            # 发送注册请求
-            response = self.parent().register_account(account, password, security_pwd)
-            
-            if response.get("success"):
-                QMessageBox.information(self, "成功", "账号注册成功!")
-                super().accept()
-            else:
-                # 直接使用服务器返回的错误信息
-                error_msg = response.get("detail", "注册失败")
-                QMessageBox.warning(self, "错误", error_msg)
-                
-        except Exception as e:
-            QMessageBox.warning(self, "错误", f"注册失败: {str(e)}")
-
-    def open_change_pwd(self):
-        """打开修改密码对话框"""
-        self.close()  # 关闭当前注册对话框
-        dialog = ChangePasswordDialog(self.parent())  # 创建修改密码对话框
-        dialog.move(self.parent().geometry().center() - dialog.rect().center())
-        dialog.exec_()
-
-    def open_register(self):
-        """重新打开注册对话框"""
-        self.register_radio.setChecked(True)
-        # 清空所有输入框
-        self.account_input.clear()
-        self.password_input.clear()
-        self.confirm_pwd_input.clear()
-        self.security_pwd_input.clear()
-        self.captcha_input.clear()
-        self.refresh_captcha()
-
-    def open_unlock(self):
-        """打开角色解卡对话框"""
-        # TODO: 实现角色解卡对话框
-        QMessageBox.information(self, "提示", "角色解卡功能正在开发中...")
-        self.register_radio.setChecked(True)
-
-    def radio_clicked(self, radio_button):
-        if radio_button.isChecked():
-            if radio_button == self.change_pwd_radio:
-                self.open_change_pwd()  
-            elif radio_button == self.register_radio:
-                self.open_register()
-            elif radio_button == self.unlock_radio:
-                self.open_unlock()
-            
-        
-        # 服务类型标签
-        service_label = QLabel("服务类型: 账号注册")
-        service_label.setStyleSheet("color: #00BFFF; font-size: 14px;")
-        self.main_layout.addWidget(service_label)
-        
-        # 添加弹性空间
-        self.main_layout.addStretch()
-        
-        # 按钮区域
-        btn_layout = QHBoxLayout()
-        self.confirm_btn = QPushButton("确定")
-        self.cancel_btn = QPushButton("取消")
-        
-        # 设置按钮��式
-        self.confirm_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #0078d7;
-                border: none;
-                color: white;
-                padding: 10px 30px;
-                font-size: 18px;
-            }
-            QPushButton:hover {
-                background-color: #1e88e5;
-            }
-        """)
-        
-        self.cancel_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2a2a2a;
-                border: 1px solid #3a3a3a;
-                color: white;
-                padding: 10px 30px;
-                font-size: 18px;
-            }
-            QPushButton:hover {
-                background-color: #3a3a3a;
-            }
-        """)
-        
-        btn_layout.addWidget(self.confirm_btn)
-        btn_layout.addWidget(self.cancel_btn)
-        btn_layout.setSpacing(20)
-        self.main_layout.addLayout(btn_layout)
-        
-        # 连按号
-        self.confirm_btn.clicked.connect(self.accept)
-        self.cancel_btn.clicked.connect(self.reject)
-        
-    def _create_input(self, label_text, placeholder_text):
-        container = QWidget()
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(15)
-        
-        # 创建左侧标签
-        label = QLabel(f"{label_text}:")
-        label.setFixedWidth(100)
-        
-        # 创建输入框
-        input_field = QLineEdit()
-        input_field.setFixedWidth(250)
-        
-        # 创建右侧提示文本
-        hint = QLabel(placeholder_text)
-        hint.setStyleSheet("color: #666666; font-size: 14px;")
-        
-        # 添加到布局
-        layout.addWidget(label)
-        layout.addWidget(input_field)
-        layout.addWidget(hint)
-        layout.addStretch()
-        
-        self.main_layout.addWidget(container)
-        return input_field
-
-    def generate_captcha(self):
-        """生成4位随机数字验证码"""
-        import random
-        return ''.join(str(random.randint(0, 9)) for _ in range(4))
-
-    def refresh_captcha(self):
-        """刷新验证码"""
-        self.current_captcha = self.generate_captcha()
-        self.captcha_number.setText(self.current_captcha)
-
-    def accept(self):
-        """确认按钮点击处理"""
-        try:
-            # 获取输入内容
-            account = self.account_input.text().strip()
-            password = self.password_input.text().strip()
-            confirm_pwd = self.confirm_pwd_input.text().strip()
-            security_pwd = self.security_pwd_input.text().strip()
-            captcha = self.captcha_input.text().strip()
-            
-            # 验证输入
-            if not all([account, password, confirm_pwd, security_pwd, captcha]):
-                QMessageBox.warning(self, "错误", "请填写所有必填项")
-                return
-            
-            # 验证是否只包含字母和数字
-            if not account.isalnum():
-                QMessageBox.warning(self, "错误", "账号只能包含字母和数字")
-                return
-                
-            if not password.isalnum():
-                QMessageBox.warning(self, "错误", "密码只能包含字母和数字")
-                return
-                
-            if not security_pwd.isalnum():
-                QMessageBox.warning(self, "错误", "安全密钥只能包含字母和数字")
-                return
-                
-            if len(account) < 4 or len(account) > 12:
-                QMessageBox.warning(self, "错误", "账号长度必须在4-12位之间")
-                return
-                
-            if len(password) < 4 or len(password) > 12:
-                QMessageBox.warning(self, "错误", "密码长度必须在4-12位之间") 
-                return
-                
-            if len(security_pwd) < 1 or len(security_pwd) > 8:
-                QMessageBox.warning(self, "错误", "安全密钥长度必须在1-8位之间")
-                return
-                
-            if not captcha:
-                QMessageBox.warning(self, "错误", "请输入验证码")
-                return
-
-            # 验证验证码
-            if captcha != self.current_captcha:
-                QMessageBox.warning(self, "错误", "验证码错误")
-                self.refresh_captcha()  # 刷新验证码
-                self.captcha_input.clear()  # 清空输入
-                return
-                
-            # 发送修改密码请求
-            response = self.parent().change_password(account, security_pwd, new_password)
-            
-            if response.get("success"):
-                QMessageBox.information(self, "成功", "密码修改成功!")
-                super().accept()
-            else:
-                error_msg = response.get("detail", "修改密码失败")
-                QMessageBox.warning(self, "错误", error_msg)
-                
-        except Exception as e:
-            QMessageBox.warning(self, "错误", f"修改密码失败: {str(e)}")
-
-class ChangePasswordDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("修改密码")
         self.setFixedSize(550, 550)
         
-        # 设置窗口背景色和样式
+        # 设置通用样式表
         self.setStyleSheet("""
             QDialog {
                 background-color: #1a1a1a;
@@ -1202,8 +696,8 @@ class ChangePasswordDialog(QDialog):
                 height: 18px;
             }
             QRadioButton:disabled {
-                color: #4CAF50;  /* 禁用状态使用绿色 */
-                font-weight: bold;  /* 加粗 */
+                color: #4CAF50;
+                font-weight: bold;
             }
             QPushButton {
                 background-color: #2a2a2a;
@@ -1216,15 +710,36 @@ class ChangePasswordDialog(QDialog):
             QPushButton:hover {
                 background-color: #3a3a3a;
             }
-""")
+        """)
         
+        self.setup_ui(title, hint_text)
+        
+    def setup_ui(self, title, hint_text):
         # 创建主布局
         self.main_layout = QVBoxLayout()
         self.main_layout.setSpacing(20)
         self.main_layout.setContentsMargins(20, 20, 20, 20)
         self.setLayout(self.main_layout)
         
-        # 标题标签 - 红色背景
+        # 标题区域
+        self._setup_title()
+        
+        # 提示文本
+        self._setup_hint(hint_text)
+        
+        # 输入框区域
+        self._setup_inputs()
+        
+        # 验证码区域
+        self._setup_captcha()
+        
+        # 单选按钮组
+        self._setup_radio_buttons()
+        
+        # 按钮区域
+        self._setup_buttons()
+        
+    def _setup_title(self):
         title_container = QWidget()
         title_container.setStyleSheet("background-color: #aa0000;")
         title_container.setFixedHeight(40)
@@ -1238,23 +753,36 @@ class ChangePasswordDialog(QDialog):
         
         self.main_layout.addWidget(title_container)
         
-        # 提示文本
-        hint_label = QLabel("*欢迎使用修改密码服务")
+    def _setup_hint(self, hint_text):
+        hint_label = QLabel(hint_text)
         hint_label.setStyleSheet("color: #00BFFF; font-size: 20px;")
         self.main_layout.addWidget(hint_label)
         
-        # 创建输入框
-        self.account_input = self._create_input("账号名称", "4-12位数字和字母")
-        self.account_input.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
+    def _create_input(self, label_text, placeholder_text):
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(15)
         
-        self.new_password_input = self._create_input("新密码", "4-12位数字和字母")
-        self.new_password_input.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
-        self.new_password_input.setEchoMode(QLineEdit.Password)
+        label = QLabel(f"{label_text}:")
+        label.setFixedWidth(100)
         
-        self.security_pwd_input = self._create_input("安全密码", "注册时设置的安全密码")
-        self.security_pwd_input.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
+        input_field = QLineEdit()
+        input_field.setFixedWidth(250)
+        input_field.setPlaceholderText(placeholder_text)
         
-        # 验证码区域
+        hint = QLabel(placeholder_text)
+        hint.setStyleSheet("color: #666666; font-size: 14px;")
+        
+        layout.addWidget(label)
+        layout.addWidget(input_field)
+        layout.addWidget(hint)
+        layout.addStretch()
+        
+        self.main_layout.addWidget(container)
+        return input_field
+        
+    def _setup_captcha(self):
         captcha_container = QWidget()
         captcha_layout = QHBoxLayout(captcha_container)
         captcha_layout.setContentsMargins(0, 0, 0, 0)
@@ -1291,27 +819,7 @@ class ChangePasswordDialog(QDialog):
 
         self.main_layout.addWidget(captcha_container)
         
-        # 添加单选按钮组
-        radio_layout = QHBoxLayout()
-        radio_layout.setSpacing(30)
-        self.register_radio = QRadioButton("账号注册")
-        self.change_pwd_radio = QRadioButton("更改密码")
-        
-        # 设置默认选中状态并禁用当前选中的按钮
-        self.change_pwd_radio.setChecked(True)
-        self.change_pwd_radio.setEnabled(False)
-
-        radio_layout.addWidget(self.register_radio)
-        radio_layout.addWidget(self.change_pwd_radio)
-        self.main_layout.addLayout(radio_layout)
-
-        # 绑定信号到槽函数
-        self.register_radio.clicked.connect(self.switch_to_register)
-        
-        # 添加弹性空间
-        self.main_layout.addStretch()
-        
-        # 按钮区域
+    def _setup_buttons(self):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(20)
         
@@ -1336,29 +844,8 @@ class ChangePasswordDialog(QDialog):
         
         self.main_layout.addLayout(btn_layout)
         
-        # 连接按钮信号
         self.confirm_btn.clicked.connect(self.accept)
         self.cancel_btn.clicked.connect(self.reject)
-
-    def _create_input(self, label_text, placeholder_text):
-        container = QWidget()
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(15)
-        
-        label = QLabel(f"{label_text}:")
-        label.setFixedWidth(100)
-        
-        input_field = QLineEdit()
-        input_field.setFixedWidth(250)
-        input_field.setPlaceholderText(placeholder_text)
-        
-        layout.addWidget(label)
-        layout.addWidget(input_field)
-        layout.addStretch()
-        
-        self.main_layout.addWidget(container)
-        return input_field
 
     def generate_captcha(self):
         import random
@@ -1368,6 +855,128 @@ class ChangePasswordDialog(QDialog):
         self.current_captcha = self.generate_captcha()
         self.captcha_number.setText(self.current_captcha)
 
+    def _setup_radio_buttons(self):
+        radio_layout = QHBoxLayout()
+        radio_layout.setSpacing(30)
+        self.register_radio = QRadioButton("账号注册")
+        self.change_pwd_radio = QRadioButton("更改密码")
+        
+        radio_layout.addWidget(self.register_radio)
+        radio_layout.addWidget(self.change_pwd_radio)
+        self.main_layout.addLayout(radio_layout)
+
+# 注册对话框类
+class RegisterDialog(BaseServiceDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent, 
+                        title="账号注册",
+                        hint_text="*欢迎使用账号注册服务,请务必牢记账号密码")
+        
+    def _setup_inputs(self):
+        self.account_input = self._create_input("账号名称", "4-12位数字和字母")
+        self.password_input = self._create_input("输入密码", "4-12位数字和字母")
+        self.confirm_pwd_input = self._create_input("确认密码", "两次输入的密码")
+        self.security_pwd_input = self._create_input("安全密码", "1-8位数字和字母")
+        
+        # 设置验证器
+        for input_field in [self.account_input, self.password_input, 
+                          self.confirm_pwd_input, self.security_pwd_input]:
+            input_field.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
+            
+    def _setup_radio_buttons(self):
+        super()._setup_radio_buttons()
+        self.register_radio.setChecked(True)
+        self.register_radio.setEnabled(False)
+        self.change_pwd_radio.clicked.connect(self.open_change_pwd)
+        
+    def accept(self):
+        try:
+            # 获取并验证输入
+            account = self.account_input.text().strip()
+            password = self.password_input.text().strip()
+            confirm_pwd = self.confirm_pwd_input.text().strip()
+            security_pwd = self.security_pwd_input.text().strip()
+            captcha = self.captcha_input.text().strip()
+            
+            # 验证输入
+            if not self._validate_input(account, password, confirm_pwd, security_pwd, captcha):
+                return
+                
+            # 发送注册请求
+            response = self.parent().register_account(account, password, security_pwd)
+            
+            if response.get("success"):
+                QMessageBox.information(self, "成功", "账号注册成功!")
+                super().accept()
+            else:
+                error_msg = response.get("detail", "注册失败")
+                QMessageBox.warning(self, "错误", error_msg)
+                
+        except Exception as e:
+            QMessageBox.warning(self, "错误", f"注册失败: {str(e)}")
+            
+    def _validate_input(self, account, password, confirm_pwd, security_pwd, captcha):
+        if not all([account, password, confirm_pwd, security_pwd]):
+            QMessageBox.warning(self, "错误", "请填写所有必填项")
+            return False
+            
+        if not account.isalnum() or not password.isalnum() or not security_pwd.isalnum():
+            QMessageBox.warning(self, "错误", "输入只能包含字母和数字")
+            return False
+            
+        if len(account) < 4 or len(account) > 12:
+            QMessageBox.warning(self, "错误", "账号长度必须在4-12位之间")
+            return False
+            
+        if len(password) < 4 or len(password) > 12:
+            QMessageBox.warning(self, "错误", "密码长度必须在4-12位之间")
+            return False
+            
+        if password != confirm_pwd:
+            QMessageBox.warning(self, "错误", "两次输入的密码不一致")
+            return False
+            
+        if len(security_pwd) < 1 or len(security_pwd) > 8:
+            QMessageBox.warning(self, "错误", "安全密码长度必须在1-8位之间")
+            return False
+            
+        if captcha != self.current_captcha:
+            QMessageBox.warning(self, "错误", "验证码错误")
+            self.refresh_captcha()
+            self.captcha_input.clear()
+            return False
+            
+        return True
+        
+    def open_change_pwd(self):
+        self.close()
+        dialog = ChangePasswordDialog(self.parent())
+        dialog.move(self.parent().geometry().center() - dialog.rect().center())
+        dialog.exec_()
+
+# 修改密码对话框类
+class ChangePasswordDialog(BaseServiceDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent, 
+                        title="修改密码",
+                        hint_text="*欢迎使用修改密码服务")
+        
+    def _setup_inputs(self):
+        self.account_input = self._create_input("账号名称", "4-12位数字和字母")
+        self.new_password_input = self._create_input("新密码", "4-12位数字和字母")
+        self.security_pwd_input = self._create_input("安全密码", "注册时设置的安全密码")
+        
+        # 设置验证器和密码模式
+        for input_field in [self.account_input, self.new_password_input, self.security_pwd_input]:
+            input_field.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
+        self.new_password_input.setEchoMode(QLineEdit.Password)
+            
+    def _setup_radio_buttons(self):
+        super()._setup_radio_buttons()
+        self.change_pwd_radio.setChecked(True)
+        self.change_pwd_radio.setEnabled(False)
+        self.register_radio.clicked.connect(self.switch_to_register)
+        
     def accept(self):
         try:
             account = self.account_input.text().strip()
@@ -1375,30 +984,9 @@ class ChangePasswordDialog(QDialog):
             security_pwd = self.security_pwd_input.text().strip()
             captcha = self.captcha_input.text().strip()
             
-            # 验证输入
-            if not all([account, new_password, security_pwd, captcha]):
-                QMessageBox.warning(self, "错误", "请填写所有必填项")
+            if not self._validate_input(account, new_password, security_pwd, captcha):
                 return
                 
-            if not account.isalnum() or not new_password.isalnum():
-                QMessageBox.warning(self, "错误", "账号和密码只能包含字母和数字")
-                return
-                
-            if len(account) < 4 or len(account) > 12:
-                QMessageBox.warning(self, "错误", "账号长度必须在4-12位之间")
-                return
-                
-            if len(new_password) < 4 or len(new_password) > 12:
-                QMessageBox.warning(self, "错误", "新密码长度必须在4-12位之间")
-                return
-                
-            if captcha != self.current_captcha:
-                QMessageBox.warning(self, "错误", "验证码错误")
-                self.refresh_captcha()
-                self.captcha_input.clear()
-                return
-                
-            # 发送修改密码请求
             response = self.parent().change_password(account, security_pwd, new_password)
             
             if response.get("success"):
@@ -1410,10 +998,33 @@ class ChangePasswordDialog(QDialog):
                 
         except Exception as e:
             QMessageBox.warning(self, "错误", f"修改密码失败: {str(e)}")
-
-    # 添加切换功能的方法
+            
+    def _validate_input(self, account, new_password, security_pwd, captcha):
+        if not all([account, new_password, security_pwd, captcha]):
+            QMessageBox.warning(self, "错误", "请填写所有必填项")
+            return False
+            
+        if not account.isalnum() or not new_password.isalnum():
+            QMessageBox.warning(self, "错误", "账号和密码只能包含字母和数字")
+            return False
+            
+        if len(account) < 4 or len(account) > 12:
+            QMessageBox.warning(self, "错误", "账号长度必须在4-12位之间")
+            return False
+            
+        if len(new_password) < 4 or len(new_password) > 12:
+            QMessageBox.warning(self, "错误", "新密码长度必须在4-12位之间")
+            return False
+            
+        if captcha != self.current_captcha:
+            QMessageBox.warning(self, "错误", "验证码错误")
+            self.refresh_captcha()
+            self.captcha_input.clear()
+            return False
+            
+        return True
+        
     def switch_to_register(self):
-        """切换到注册窗口"""
         self.close()
         dialog = RegisterDialog(self.parent())
         dialog.move(self.parent().geometry().center() - dialog.rect().center())
