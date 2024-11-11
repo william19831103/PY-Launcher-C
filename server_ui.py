@@ -22,8 +22,8 @@ import json
 from pathlib import Path
 import urllib.parse
 
-
-
+# 在文件开头添加一个全局变量来存储白名单
+GLOBAL_MPQ_WHITELIST = set()
 
 # 将FastAPI应用命名为api_app而不是app
 api_app = FastAPI(title="无限魔兽服务器")
@@ -200,7 +200,9 @@ class ServerUI(QMainWindow):
         self.download_path = "Download"
         self.setup_ui()
         self.load_saved_config()
-        self.mpq_whitelist = self.load_mpq_whitelist()
+        # 初始化时加载白名单到全局变量
+        global GLOBAL_MPQ_WHITELIST
+        GLOBAL_MPQ_WHITELIST = self.load_mpq_whitelist()
 
     def setup_ui(self):
         # 设置窗口基本属性
@@ -659,7 +661,7 @@ class ServerUI(QMainWindow):
             xml_string = xml_string.replace('SOAP-ENV:', '').replace('ns1:', '')
             root = ET.fromstring(xml_string)
             
-            # 检查是否存在错误信息
+            # 检���是否存在错误信息
             fault = root.find('.//Fault')
             if fault is not None:
                 fault_string = fault.find('faultstring').text
@@ -940,32 +942,21 @@ async def check_update():
     try:
         download_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Download")
         print(f"扫描目录: {download_path}") 
-        
+
         files_info = {}
         
-        # 获取完整的MPQ白名单（基础白名单 + 服务器Data目录下的所有文件）
-        mpq_whitelist = set()
-        try:
-            # 1. 从MpqWhiteList.txt读取基础白名单
-            with open('MpqWhiteList.txt', 'r', encoding='utf-8') as f:
-                for line in f:
-                    line = line.strip().lower()
-                    if line:
-                        mpq_whitelist.add(line)
-            print(f"从文件加载的基础MPQ白名单: {mpq_whitelist}")
-            
-            # 2. 添加服务器Data目录下的所有MPQ文件到白名单
-            server_data_path = os.path.join(download_path, "Data")
-            if os.path.exists(server_data_path):
-                for file in os.listdir(server_data_path):
-                    if file.lower().endswith('.mpq'):
-                        mpq_whitelist.add(file.lower())
-                        print(f"添加服务器MPQ到白名单: {file.lower()}")
-                        
-            print(f"最终的MPQ白名单: {mpq_whitelist}")
-            
-        except Exception as e:
-            print(f"处理MPQ白名单失败: {str(e)}")
+        # 使用全局白名单
+        mpq_whitelist = GLOBAL_MPQ_WHITELIST.copy()
+        
+        # 只需要添加服务器Data目录下的MPQ文件到白名单
+        server_data_path = os.path.join(download_path, "Data")
+        if os.path.exists(server_data_path):
+            for file in os.listdir(server_data_path):
+                if file.lower().endswith('.mpq'):
+                    mpq_whitelist.add(file.lower())
+                    print(f"添加服务器MPQ到白名单: {file.lower()}")
+                    
+        print(f"最终的MPQ白名单: {mpq_whitelist}")
 
         # 扫描Download目录
         for root, _, files in os.walk(download_path):
