@@ -356,7 +356,7 @@ class WowLauncher(QMainWindow):
                     
                 self.info_box.setText(status)
         except Exception as e:
-            print(f"更新服务器状态失���: {str(e)}")
+            print(f"更新服务器状态失: {str(e)}")
             self.info_box.setText("无法获取服务器状态")
     
     def open_register(self):
@@ -449,7 +449,7 @@ class WowLauncher(QMainWindow):
                         
                         mpq_whitelist = set(data.get("mpq_whitelist", []))
                         
-                        self.log_message(f"获���到服务器文件列表: {len(server_files)}个文件")
+                        self.log_message(f"获到服务器文件列表: {len(server_files)}个文件")
                         self.log_message(f"强制更新WOW.EXE: {'是' if force_wow == 1 else '否'}")
                         self.log_message(f"强制删除无关MPQ: {'是' if force_mpq == 1 else '否'}")
                     else:
@@ -741,23 +741,49 @@ class RegisterDialog(QDialog):
 
         # 创建左侧标签
         captcha_label = QLabel("随机验证:")
-        captcha_label.setFixedWidth(100)  # 与其他标签相同宽度
+        captcha_label.setFixedWidth(100)
 
-        # 创建入框
+        # 创建输入框
         self.captcha_input = QLineEdit()
-        self.captcha_input.setFixedWidth(250)  # 与其他输入框相同宽度
+        self.captcha_input.setFixedWidth(250)
 
         # 创建验证码数字标签
-        captcha_number = QLabel("10023")
-        captcha_number.setStyleSheet("""
+        self.captcha_number = QLabel()  # 保存为实例变量以便后续访问
+        self.captcha_number.setStyleSheet("""
             color: #ff0000;
             font-size: 16px;
+            font-weight: bold;
+            background-color: #333333;
+            padding: 5px 10px;
+            border-radius: 3px;
         """)
+        
+        # 生成随机验证码
+        self.current_captcha = self.generate_captcha()
+        self.captcha_number.setText(self.current_captcha)
+        
+        # 添加刷新按钮
+        self.refresh_btn = QPushButton("刷新")
+        self.refresh_btn.setFixedWidth(60)
+        self.refresh_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2a2a2a;
+                color: white;
+                border: 1px solid #3a3a3a;
+                padding: 5px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #3a3a3a;
+            }
+        """)
+        self.refresh_btn.clicked.connect(self.refresh_captcha)
 
         # 添加到布局
         captcha_layout.addWidget(captcha_label)
         captcha_layout.addWidget(self.captcha_input)
-        captcha_layout.addWidget(captcha_number)
+        captcha_layout.addWidget(self.captcha_number)
+        captcha_layout.addWidget(self.refresh_btn)
         captcha_layout.addStretch()
 
         self.main_layout.addWidget(captcha_container)
@@ -822,7 +848,7 @@ class RegisterDialog(QDialog):
         btn_layout.setSpacing(20)
         self.main_layout.addLayout(btn_layout)
         
-        # 连按���号
+        # 连按号
         self.confirm_btn.clicked.connect(self.accept)
         self.cancel_btn.clicked.connect(self.reject)
         
@@ -852,6 +878,16 @@ class RegisterDialog(QDialog):
         
         self.main_layout.addWidget(container)
         return input_field
+
+    def generate_captcha(self):
+        """生成4位随机数字验证码"""
+        import random
+        return ''.join(str(random.randint(0, 9)) for _ in range(4))
+
+    def refresh_captcha(self):
+        """刷新验证码"""
+        self.current_captcha = self.generate_captcha()
+        self.captcha_number.setText(self.current_captcha)
 
     def accept(self):
         """确认按钮点击处理"""
@@ -886,6 +922,13 @@ class RegisterDialog(QDialog):
                 
             if not captcha:
                 QMessageBox.warning(self, "错误", "请输入验证码")
+                return
+
+            # 验证验证码
+            if captcha != self.current_captcha:
+                QMessageBox.warning(self, "错误", "验证码错误")
+                self.refresh_captcha()  # 刷新验证码
+                self.captcha_input.clear()  # 清空输入
                 return
                 
             # 发送注册请求
