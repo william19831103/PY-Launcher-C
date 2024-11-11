@@ -247,17 +247,47 @@ async def handle_request(request: Request):
 
         elif opcode == Opcodes.CHANGE_PASSWORD:
             account = data["account"]
-            old_password = data["old_password"]
             new_password = data["new_password"]
+            security_pwd = data["security_password"]  # 从请求中获取安全密码
             
-            if account in db.accounts and db.accounts[account]["password"] == old_password:
-                db.accounts[account]["password"] = new_password
-                return JSONResponse(content={
-                    "success": True,
-                    "message": "密码修改成功"
-                })
-            else:
-                raise HTTPException(status_code=400, detail="原密码错误")
+            try:
+                connection = get_db_connection()
+                if connection:
+                    cursor = connection.cursor()
+                    # 查询账号ID和安全密码(email字段)
+                    query = "SELECT id, email FROM `realmd`.`account` WHERE username = %s"
+                    cursor.execute(query, (account,))
+                    result = cursor.fetchone()
+                    
+                    if result:
+                        account_id, stored_security_pwd = result
+                        
+                        # 验证安全密码
+                        if stored_security_pwd == security_pwd:
+                            # 使用SOAP命令修改密码
+                            server_ui = ServerUI()
+                            command = f"account set password {account_id} {new_password} {new_password}"
+                            soap_result = server_ui.soap_client(command)
+                            
+                            if "The password was changed" in soap_result:
+                                return JSONResponse(content={
+                                    "success": True,
+                                    "message": "密码修改成功"
+                                })
+                            else:
+                                raise HTTPException(status_code=400, detail="修改密码失败,请联系管理员")
+                        else:
+                            raise HTTPException(status_code=400, detail="安全密码错误")
+                    else:
+                        raise HTTPException(status_code=404, detail="账号不存在")
+                    
+            except Error as e:
+                print(f"数据库操作错误: {e}")
+                raise HTTPException(status_code=500, detail="数据库操作失败")
+            finally:
+                if connection and connection.is_connected():
+                    cursor.close()
+                    connection.close()
 
         else:
             raise HTTPException(status_code=400, detail="未知的操作码")
@@ -486,7 +516,7 @@ class ServerUI(QMainWindow):
         # 状态栏
         status_layout = QHBoxLayout()
         
-        self.status_label = QLabel("服务器状态: 已停止")
+        self.status_label = QLabel("服务器状: 已停止")
         status_layout.addWidget(self.status_label)
         
         status_layout.addStretch()
@@ -679,7 +709,7 @@ class ServerUI(QMainWindow):
             self.log_message(f"force_mpq: {config['force_mpq']}")
 
             if save_config(config):
-                # 更新全局配置
+                # 更新全局置
                 CONFIG.clear()
                 CONFIG.update(config)
                 
@@ -860,7 +890,7 @@ class ServerUI(QMainWindow):
         """置服务器状态监控"""
         self.status_timer = QTimer()
         self.status_timer.timeout.connect(self.check_server_status)
-        self.status_timer.start(10000)  # 每10秒检查一次
+        self.status_timer.start(10000)  # 每10秒检查一
         # 立即执行一次检查
         QTimer.singleShot(0, self.check_server_status)
         
@@ -1062,7 +1092,7 @@ async def check_update():
                     }
                 else:
                     # 其他目录的文件始终添加
-                    print(f"添加其他目录文件: {relative_path}")
+                    print(f"添加其他目录件: {relative_path}")
                     files_info[relative_path] = {
                         'hash': hashlib.md5(open(full_path, 'rb').read()).hexdigest(),
                         'size': os.path.getsize(full_path),

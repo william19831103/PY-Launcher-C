@@ -45,7 +45,7 @@ class WowLauncher(QMainWindow):
         # 创建定时器定期更新服务器状态
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_server_status)
-        self.timer.start(30000)  # 每30秒更新一次
+        self.timer.start(60000)  # 每60秒更新一次
 
     async def initial_update(self):
         """启动时的初始更新"""
@@ -291,44 +291,8 @@ class WowLauncher(QMainWindow):
             return {
                 "success": False,
                 "detail": str(e)
-            }
+            }        
 
-    def register_account(self, account, password, security_pwd):
-        """注册账号"""
-        data = {
-            "account": account,
-            "password": password,
-            "security_password": security_pwd
-        }
-        
-        return self.loop.run_until_complete(self.send_request(Opcodes.REGISTER_ACCOUNT, data))
-        
-    def change_password(self, account, old_password, new_password):
-        """修改密码"""
-        data = {
-            "account": account,
-            "old_password": old_password,
-            "new_password": new_password
-        }
-        
-        return self.loop.run_until_complete(self.send_request(Opcodes.CHANGE_PASSWORD, data))
-        
-    def unlock_character(self, account, character_name):
-        """角色解卡"""
-        data = {
-            "account": account,
-            "character_name": character_name
-        }
-        
-        return self.loop.run_until_complete(self.send_request(Opcodes.UNLOCK_CHARACTER, data))
-        
-    def check_client_update(self):
-        """检查客户端更新"""
-        response = self.loop.run_until_complete(self.send_request(Opcodes.CHECK_VERSION))
-        if response and response.get("needs_update"):
-            patch_list = response.get("patch_list", [])
-            return patch_list
-        return None
 
     def update_server_status(self):
         """更新服务器状态"""
@@ -611,7 +575,7 @@ class WowLauncher(QMainWindow):
                         self.update_server_info(data)
                         return data
                     else:
-                        raise Exception("获取服���器信息失败")
+                        raise Exception("获取服务器信息失败")
         except Exception as e:
             QMessageBox.warning(self, "错误", f"无法连接到服务器: {str(e)}")
             return None
