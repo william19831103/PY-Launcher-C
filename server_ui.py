@@ -85,15 +85,6 @@ class Database:
 
 db = Database()
 
-# 添加数据库连接配置
-DB_CONFIG = {
-    'host': '127.0.0.1',
-    'port': 3306,
-    'user': 'root',
-    'password': 'root',
-    'database': 'realmd'
-}
-
 def get_db_connection():
     """创建数据库连接"""
     try:
@@ -1165,7 +1156,7 @@ async def download_file(file_path: str):
         # 构建完整的文件路径
         full_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Download", file_path)
         
-        print(f"请��下载文件: {file_path}")
+        print(f"请下载文件: {file_path}")
         print(f"完整路径: {full_path}")
         
         if os.path.exists(full_path) and os.path.isfile(full_path):
