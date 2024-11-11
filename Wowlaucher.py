@@ -632,7 +632,7 @@ class WowLauncher(QMainWindow):
             status += f"在线人数: {online_count}\n\n"
             status += "公告：\n"
             
-            # 更新公告
+            # 新公告
             announcements = server_info.get("announcements", ["暂无公告"])
             for announcement in announcements:
                 status += f"{announcement}\n"
@@ -694,6 +694,10 @@ class RegisterDialog(QDialog):
                 width: 18px;
                 height: 18px;
             }
+            QRadioButton:disabled {
+                color: #4CAF50;  /* 禁用状态使用绿色 */
+                font-weight: bold;  /* 加粗 */
+            }
             QPushButton {
                 background-color: #2a2a2a;
                 color: white;
@@ -713,7 +717,7 @@ class RegisterDialog(QDialog):
         self.main_layout.setContentsMargins(20, 20, 20, 20)
         self.setLayout(self.main_layout)
         
-        # 标��标签 - 红色背景
+        # 标题标签 - 红色背景
         title_container = QWidget()
         title_container.setStyleSheet("background-color: #aa0000;")
         title_container.setFixedHeight(40)
@@ -807,20 +811,17 @@ class RegisterDialog(QDialog):
         radio_layout = QHBoxLayout()
         radio_layout.setSpacing(30)
         self.register_radio = QRadioButton("账号注册")
-        self.unlock_radio = QRadioButton("角色解卡")
         self.change_pwd_radio = QRadioButton("更改密码")
         
-        # 设置默认选中状态
+        # 设置默认选中状态并禁用当前选中的按钮
         self.register_radio.setChecked(True)
-        
+        self.register_radio.setEnabled(False)
+
         radio_layout.addWidget(self.register_radio)
-        radio_layout.addWidget(self.unlock_radio)
         radio_layout.addWidget(self.change_pwd_radio)
         self.main_layout.addLayout(radio_layout)
 
         # 绑定信号到槽函数
-        self.register_radio.clicked.connect(lambda: self.radio_clicked(self.register_radio))
-        #.radio_clicked(self.unlock_radio))
         self.change_pwd_radio.clicked.connect(lambda: self.radio_clicked(self.change_pwd_radio))
         
         # 服务类型标签
@@ -1030,7 +1031,7 @@ class RegisterDialog(QDialog):
         self.confirm_btn = QPushButton("确定")
         self.cancel_btn = QPushButton("取消")
         
-        # 设置按钮样式
+        # 设置按钮��式
         self.confirm_btn.setStyleSheet("""
             QPushButton {
                 background-color: #0078d7;
@@ -1136,7 +1137,7 @@ class RegisterDialog(QDialog):
                 return
                 
             if len(password) < 4 or len(password) > 12:
-                QMessageBox.warning(self, "错误", "密码长度必须在4-12��之间") 
+                QMessageBox.warning(self, "错误", "密码长度必须在4-12位之间") 
                 return
                 
             if len(security_pwd) < 1 or len(security_pwd) > 8:
@@ -1200,6 +1201,10 @@ class ChangePasswordDialog(QDialog):
                 width: 18px;
                 height: 18px;
             }
+            QRadioButton:disabled {
+                color: #4CAF50;  /* 禁用状态使用绿色 */
+                font-weight: bold;  /* 加粗 */
+            }
             QPushButton {
                 background-color: #2a2a2a;
                 color: white;
@@ -1211,7 +1216,7 @@ class ChangePasswordDialog(QDialog):
             QPushButton:hover {
                 background-color: #3a3a3a;
             }
-        """)
+""")
         
         # 创建主布局
         self.main_layout = QVBoxLayout()
@@ -1290,20 +1295,18 @@ class ChangePasswordDialog(QDialog):
         radio_layout = QHBoxLayout()
         radio_layout.setSpacing(30)
         self.register_radio = QRadioButton("账号注册")
-        self.unlock_radio = QRadioButton("角色解卡")
         self.change_pwd_radio = QRadioButton("更改密码")
         
-        # 设置默认选中状态
+        # 设置默认选中状态并禁用当前选中的按钮
         self.change_pwd_radio.setChecked(True)
-        
+        self.change_pwd_radio.setEnabled(False)
+
         radio_layout.addWidget(self.register_radio)
-        radio_layout.addWidget(self.unlock_radio)
         radio_layout.addWidget(self.change_pwd_radio)
         self.main_layout.addLayout(radio_layout)
 
         # 绑定信号到槽函数
         self.register_radio.clicked.connect(self.switch_to_register)
-        self.unlock_radio.clicked.connect(self.switch_to_unlock)
         
         # 添加弹性空间
         self.main_layout.addStretch()
@@ -1415,11 +1418,6 @@ class ChangePasswordDialog(QDialog):
         dialog = RegisterDialog(self.parent())
         dialog.move(self.parent().geometry().center() - dialog.rect().center())
         dialog.exec_()
-
-    def switch_to_unlock(self):
-        """切换到角色解卡"""
-        QMessageBox.information(self, "提示", "角色解卡功能正在开发中...")
-        self.change_pwd_radio.setChecked(True)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
