@@ -729,9 +729,16 @@ class RegisterDialog(QDialog):
         
         # 创建输入框区域
         self.account_input = self._create_input("账号名称", "4-12位数字和字母")
+        self.account_input.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
+        
         self.password_input = self._create_input("输入密码", "4-12位数字和字母")
+        self.password_input.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
+        
         self.confirm_pwd_input = self._create_input("确认密码", "两次输入的密码")
+        self.confirm_pwd_input.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
+        
         self.security_pwd_input = self._create_input("安全密码", "1-8位数字和字母")
+        self.security_pwd_input.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
         
         # 验证码区域
         captcha_container = QWidget()
@@ -902,6 +909,19 @@ class RegisterDialog(QDialog):
             # 验证输入
             if not account or not password or not confirm_pwd or not security_pwd:
                 QMessageBox.warning(self, "错误", "请填写所有必填项")
+                return
+            
+            # 验证是否只包含字母和数字
+            if not account.isalnum():
+                QMessageBox.warning(self, "错误", "账号只能包含字母和数字")
+                return
+                
+            if not password.isalnum():
+                QMessageBox.warning(self, "错误", "密码只能包含字母和数字")
+                return
+                
+            if not security_pwd.isalnum():
+                QMessageBox.warning(self, "错误", "安全密码只能包含字母和数字")
                 return
                 
             if len(account) < 4 or len(account) > 12:
