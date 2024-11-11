@@ -21,6 +21,8 @@ import hashlib
 import json
 from pathlib import Path
 import urllib.parse
+import mysql.connector
+from mysql.connector import Error
 
 # 在文件开头添加一个全局变量来存储白名单
 GLOBAL_MPQ_WHITELIST = set()
@@ -83,6 +85,65 @@ class Database:
 
 db = Database()
 
+# 添加数据库连接配置
+DB_CONFIG = {
+    'host': '127.0.0.1',
+    'port': 3306,
+    'user': 'root',
+    'password': 'root',
+    'database': 'realmd'
+}
+
+def get_db_connection():
+    """创建数据库连接"""
+    try:
+        connection = mysql.connector.connect(**DB_CONFIG)
+        if connection.is_connected():
+            print("成功连接到MySQL数据库")
+            return connection
+    except Error as e:
+        print(f"连接数据库时出错: {e}")
+        return None
+
+def update_account_security_pwd(account_id, security_pwd):
+    """更新账号的安全密码"""
+    try:
+        connection = get_db_connection()
+        if connection:
+            cursor = connection.cursor()
+            # 使用email字段存储安全密码
+            update_query = "UPDATE `realmd`.`account` SET `email` = %s WHERE `id` = %s"
+            cursor.execute(update_query, (security_pwd, account_id))
+            connection.commit()
+            print(f"成功更新账号 {account_id} 的安全密码")
+            return True
+    except Error as e:
+        print(f"更新安全密码时出错: {e}")
+        return False
+    finally:
+        if connection and connection.is_connected():
+            cursor.close()
+            connection.close()
+
+def get_account_id(account_name):
+    """获取账号ID"""
+    try:
+        connection = get_db_connection()
+        if connection:
+            cursor = connection.cursor()
+            query = "SELECT id FROM `realmd`.`account` WHERE username = %s"
+            cursor.execute(query, (account_name,))
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+    except Error as e:
+        print(f"获取账号ID时出错: {e}")
+    finally:
+        if connection and connection.is_connected():
+            cursor.close()
+            connection.close()
+    return None
+
 # API路由
 @api_app.post("/api")
 async def handle_request(request: Request):
@@ -112,7 +173,6 @@ async def handle_request(request: Request):
             password = data["password"]
             security_pwd = data["security_password"]
             
-            # 执行SOAP命令创建账号
             try:
                 # 创建ServerUI实例来使用soap_client
                 server_ui = ServerUI()
@@ -121,12 +181,21 @@ async def handle_request(request: Request):
                 
                 # 检查SOAP返回结果
                 if "Account created" in result:
-                    # 将账号信息保存到数据库
-                    db.add_account(account, password, security_pwd)
-                    return JSONResponse(content={
-                        "success": True, 
-                        "message": "注册成功"
-                    })
+                    # 获取新创建的账号ID
+                    account_id = get_account_id(account)
+                    if account_id:
+                        # 更新安全密码
+                        if update_account_security_pwd(account_id, security_pwd):
+                            # 将账号信息保存到本地数据库
+                            db.add_account(account, password, security_pwd)
+                            return JSONResponse(content={
+                                "success": True, 
+                                "message": "注册成功"
+                            })
+                        else:
+                            raise HTTPException(status_code=500, detail="更新安全密码失败")
+                    else:
+                        raise HTTPException(status_code=500, detail="获取账号ID失败")
                 else:
                     # 处理常见的错误情况
                     if "already exist" in result:
@@ -557,7 +626,7 @@ class ServerUI(QMainWindow):
         """加载保存的配置"""
         config = CONFIG  # 使用全局配置对象
         
-        # 从扁平化配置中加载值
+        # 从扁平��配置中加载值
         self.login_port.setText(str(config.get("server_port", 8080)))
         self.wow_ip.setText(config.get("wow_ip", "127.0.0.1"))
         self.wow_port.setText(str(config.get("wow_port", "3724")))
