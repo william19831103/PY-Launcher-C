@@ -244,7 +244,7 @@ class ServerUI(QMainWindow):
             }
         """)
 
-        # 创建央部件
+        # 创建中央部件
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
@@ -477,12 +477,9 @@ class ServerUI(QMainWindow):
         if not self.server_running:
             # 启动前验证配置
             try:
-                force_wow = int(CONFIG.get("force_wow", 0))
-                force_mpq = int(CONFIG.get("force_mpq", 0))
+
                 self.log_message(f"启动服务器 - 当前配置:")
-                self.log_message(f"force_wow: {force_wow}")
-                self.log_message(f"force_mpq: {force_mpq}")
-                
+
                 # 启动服务器
                 self.server_running = True
                 self.start_btn.setText("停止服务")
@@ -942,12 +939,7 @@ async def check_update():
     """获取服务器文件列表并处理MPQ同步"""
     try:
         download_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Download")
-        print(f"扫描目录: {download_path}")
-        
-        # 首先打印当前配置值，用于调试
-        force_wow = int(CONFIG.get("force_wow", 0))
-        force_mpq = int(CONFIG.get("force_mpq", 0))
-        print(f"当前配置 - force_wow: {force_wow}, force_mpq: {force_mpq}")
+        print(f"扫描目录: {download_path}") 
         
         files_info = {}
         
@@ -1039,14 +1031,8 @@ async def check_update():
                 "force_mpq_enabled": bool(force_mpq)   # 添加布尔值
             },
             "mpq_whitelist": list(mpq_whitelist)
-        }
-        
-        # 打印完整的响应数据用于调试
-        print("\n完整的响应数据:")
-        print(json.dumps(response_data, indent=2, ensure_ascii=False))
-        print(f"\n配置值:")
-        print(f"- force_wow: {force_wow} (类型: {type(force_wow)})")
-        print(f"- force_mpq: {force_mpq} (类型: {type(force_mpq)})")
+        }       
+
         
         # 使用 JSONResponse 时指定媒体类型和编码，并添加额外的响应头
         return JSONResponse(
