@@ -23,6 +23,7 @@ from pathlib import Path
 import urllib.parse
 import mysql.connector
 from mysql.connector import Error
+import random
 
 # 在文件开头添加一个全局变量来存储白名单
 GLOBAL_MPQ_WHITELIST = set()
@@ -190,7 +191,7 @@ async def handle_request(request: Request):
                             db.add_account(account, password, security_pwd)
                             return JSONResponse(content={
                                 "success": True, 
-                                "message": "注册成功"
+                                "message": "注册功"
                             })
                         else:
                             raise HTTPException(status_code=500, detail="更新安全密码失败")
@@ -382,7 +383,7 @@ class ServerUI(QMainWindow):
         config_layout.addWidget(self.wow_port, 2, 1)
 
         # 服务器名称
-        config_layout.addWidget(QLabel("服务器名称:"), 3, 0)
+        config_layout.addWidget(QLabel("服务器称:"), 3, 0)
         self.server_title = QLineEdit()
         self.server_title.setFixedWidth(200)
         config_layout.addWidget(self.server_title, 3, 1)
@@ -419,7 +420,7 @@ class ServerUI(QMainWindow):
         self.force_mpq.setFixedWidth(100)
         config_layout.addWidget(self.force_mpq, 4, 3)
 
-        # 在服务器配置区域添加数据库配置
+        # 在服务器配置区域加数据库配置
         config_layout.addWidget(QLabel("MySQL配置"), 5, 0, 1, 4)  # 添加标题
         
         # MySQL主机
@@ -543,56 +544,8 @@ class ServerUI(QMainWindow):
                 background: #3498db;
             }
         """)
-        self.force_mpq_check.stateChanged.connect(self.on_force_mpq_changed)
-        options_layout.addWidget(self.force_mpq_check)
+        self.force_mpq_check.stateChanged.connect(self.on_force_mpq_changed)    
 
-        options_layout.addStretch()
-
-        # 功能按钮区域
-        self.button_container = QWidget(self)        
-        self.button_container.setGeometry(60, 690, 1108, 50)  # 调整位置
-        button_layout = QHBoxLayout(self.button_container)
-        button_layout.setSpacing(30)
-        
-        # 创建三个带背景的按钮容器
-        for text in ["账号管理", "游戏商城", "检查更新"]:
-            # 创建按钮容器
-            btn_frame = QFrame(self.button_container)
-            btn_frame.setFixedSize(220, 40)
-            btn_frame.setStyleSheet("""
-                QFrame {
-                    background-color: rgba(41, 128, 185, 0.8);
-                    border-radius: 5px;
-                }
-            """)
-            
-            # 在容器内创建按钮
-            btn = QPushButton(text, btn_frame)
-            btn.setGeometry(0, 0, 220, 40)  # 填满容器
-            btn.setStyleSheet("""
-                QPushButton {
-                    background-color: transparent;
-                    color: white;
-                    border: none;
-                    font-size: 18px;
-                    font-weight: bold;    
-                }
-                QPushButton:hover {
-                    background-color: rgba(52, 152, 219, 0.3);
-                }
-            """)
-            
-            # 设置按钮文字居中
-            btn.setFixedSize(220, 50)
-            
-            if text == "账号管理":
-                self.register_btn = btn
-            elif text == "游戏商城":
-                self.shop_btn = btn
-            else:
-                self.update_btn = btn
-                
-            button_layout.addWidget(btn_frame)
 
     def log_message(self, message):
         """添加日志消息"""
@@ -609,7 +562,7 @@ class ServerUI(QMainWindow):
 
                 # 启动服务器
                 self.server_running = True
-                self.start_btn.setText("停止服务")
+                self.start_btn.setText("停服务")
                 self.status_label.setText("服务器状态: 启动中")
                 self.log_message("服务器启动中...")
                 
@@ -632,7 +585,7 @@ class ServerUI(QMainWindow):
             # 停止服务器
             self.server_running = False
             self.start_btn.setText("启动服务")
-            self.status_label.setText("服务器状态: 已停止")
+            self.status_label.setText("服务器状态: 已止")
             self.log_message("服务器已停止")
             
             # 重置服务器状态
@@ -916,8 +869,8 @@ class ServerUI(QMainWindow):
             self.log_message("游戏服务器离")
         else:
             try:
-                # 解析在线人数信息
-                # 示例响应: "Players online: 4 (0 queued). Max online: 4 (0 queued)."
+                # 解析在线人数息
+                # 示例响: "Players online: 4 (0 queued). Max online: 4 (0 queued)."
                 if "Players online:" in result:
                     CONFIG["gameserver_online"] = 1  # 改为扁平化结构
                     # 提取当前在线人数
@@ -1037,6 +990,7 @@ class ServerUI(QMainWindow):
         except Exception as e:
             self.log_message(f"保存配置时发生错误: {str(e)}")
             QMessageBox.warning(self, "错误", f"保存配置失败: {str(e)}")
+
 
 # 添加新的API路由
 @api_app.get("/check_update")
@@ -1171,6 +1125,7 @@ async def download_file(file_path: str):
     except Exception as e:
         print(f"下载文件失败: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     # 将QApplication实例命名为qt_app
