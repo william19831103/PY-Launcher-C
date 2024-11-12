@@ -931,13 +931,28 @@ class ServerUI(QMainWindow):
             # 统计处理结果
             success_count = 0
             fail_count = 0
+            already_encrypted = 0
             
             # 处理所有MPQ文件
             for file in os.listdir(data_path):
                 if file.lower().endswith('.mpq'):
                     file_path = os.path.join(data_path, file)
-                    self.log_message(f"正在加密: {file}")
+                    self.log_message(f"正在处理: {file}")
                     
+                    # 检查文件是否已经加密
+                    try:
+                        with open(file_path, 'rb') as f:
+                            signature = f.read(3)
+                            if signature == b'^$&':
+                                self.log_message(f"文件已加密: {file}")
+                                already_encrypted += 1
+                                continue
+                    except Exception as e:
+                        self.log_message(f"检查文件加密状态时出错: {file}, {str(e)}")
+                        fail_count += 1
+                        continue
+                    
+                    # 加密文件
                     if encryptor.encrypt_file(file_path):
                         success_count += 1
                         self.log_message(f"加密成功: {file}")
@@ -945,10 +960,15 @@ class ServerUI(QMainWindow):
                         fail_count += 1
                         self.log_message(f"加密失败: {file}")
 
-  
-            html_message = f"加密完成<br>成功: {success_count} 个文件<br>失败: {fail_count} 个文件"
+            # 显示结果，包含已加密文件的信息
+            html_message = f"加密完成<br>成功: {success_count} 个文件<br>失败: {fail_count} 个文件<br>已加密: {already_encrypted} 个文件"
             self.log_message(html_message)
-            QMessageBox.information(self, "加密完成!", "加密完成!")
+            
+            # 根据结果显示不同的提示
+            if already_encrypted > 0:
+                QMessageBox.information(self, "加密完成!", f"加密完成!\n{already_encrypted} 个文件已经是加密状态")
+            else:
+                QMessageBox.information(self, "加密完成!", "加密完成!")
 
         except Exception as e:
             error_msg = f"加密过程出错: {str(e)}"

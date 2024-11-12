@@ -1,9 +1,10 @@
 class MPQEncryptor:
     def __init__(self, key: str):
-        self.key = key.encode('utf-8')  # 将密钥转换为字节
-        self.HEADER_SIZE = 3  # MPQ文件头大小改为3字节
+        self.ENCRYPT_SIZE = 512  # 只加密前512字节
+        self.HEADER_SIZE = 3     # MPQ文件头大小为3字节
         self.MPQ_SIGNATURE = b'MPQ'  # MPQ文件签名
         self.ENCRYPTED_SIGNATURE = b'^$&'  # 加密后的签名
+        self.KEY = key.encode('utf-8')  # 使用传入的通信密钥
 
     def encrypt_file(self, file_path: str) -> bool:
         try:
@@ -16,27 +17,26 @@ class MPQEncryptor:
                 print(f"文件太小: {file_path}")
                 return False
             
-            # 打印前三个字节用于调试
-            print(f"文件签名: {data[:3]}")
+            # 只在文件是MPQ文件时进行加密
+            if data[:3] == self.MPQ_SIGNATURE:
+                # 替换签名
+                data[:3] = self.ENCRYPTED_SIGNATURE
+                
+                # 只加密指定大小的数据
+                encrypt_length = min(self.ENCRYPT_SIZE, len(data))
+                key_length = len(self.KEY)
+                
+                # 从文件头之后开始加密
+                for i in range(self.HEADER_SIZE, encrypt_length):
+                    data[i] ^= self.KEY[i % key_length]
+                
+                # 写回文件
+                with open(file_path, 'wb') as f:
+                    f.write(data)
+                return True
             
-            # 检查是否是MPQ文件（不区分大小写）
-            if data[:3].upper() != self.MPQ_SIGNATURE.upper():
-                print(f"不是MPQ文件签名: {data[:3]}")
-                return False
+            return False
             
-            # 替换签名
-            data[:3] = self.ENCRYPTED_SIGNATURE
-            
-            # 加密数据部分
-            key_length = len(self.key)
-            for i in range(self.HEADER_SIZE, len(data)):
-                data[i] ^= self.key[i % key_length]
-            
-            # 写回文件
-            with open(file_path, 'wb') as f:
-                f.write(data)
-            
-            return True
         except Exception as e:
             print(f"加密文件时出错: {e}")
             return False
@@ -51,23 +51,26 @@ class MPQEncryptor:
             if len(data) < self.HEADER_SIZE:
                 return False
                 
-            # 检查是否是加密的MPQ文件
-            if data[:3] != self.ENCRYPTED_SIGNATURE:
-                return False
+            # 只在文件是加密的MPQ文件时进行解密
+            if data[:3] == self.ENCRYPTED_SIGNATURE:
+                # 解密指定大小的数据
+                decrypt_length = min(self.ENCRYPT_SIZE, len(data))
+                key_length = len(self.KEY)
+                
+                # 从文件头之后开始解密
+                for i in range(self.HEADER_SIZE, decrypt_length):
+                    data[i] ^= self.KEY[i % key_length]
+                
+                # 恢复原始签名
+                data[:3] = self.MPQ_SIGNATURE
+                
+                # 写回文件
+                with open(file_path, 'wb') as f:
+                    f.write(data)
+                return True
             
-            # 解密数据部分
-            key_length = len(self.key)
-            for i in range(self.HEADER_SIZE, len(data)):
-                data[i] ^= self.key[i % key_length]
+            return False
             
-            # 恢复原始签名
-            data[:3] = self.MPQ_SIGNATURE
-            
-            # 写回文件
-            with open(file_path, 'wb') as f:
-                f.write(data)
-            
-            return True
         except Exception as e:
             print(f"解密文件时出错: {e}")
             return False 
