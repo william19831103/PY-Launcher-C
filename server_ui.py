@@ -40,52 +40,6 @@ api_app.add_middleware(
     allow_headers=["*"],
 )
 
-# 数据模型
-class RegisterRequest(BaseModel):
-    account: str
-    password: str
-    security_password: str
-
-class ChangePasswordRequest(BaseModel):
-    account: str
-    old_password: str
-    new_password: str
-
-class UnlockCharacterRequest(BaseModel):
-    account: str
-    character_name: str
-
-# 添加服务器信息数据模型
-class ServerInfo(BaseModel):
-    wow_ip: str
-    wow_port: str
-    login_title: str
-    announcements: List[str]
-
-# 模拟数据库
-class Database:
-    def __init__(self):
-        self.accounts = {}
-        self.characters = {}
-        self.online_count = 0
-        self.announcements = [
-            "欢迎来到XX魔兽！",
-            "新服务器将于下周开放",
-            "当前版本: 1.12.3"
-        ]
-        
-    def add_account(self, account: str, password: str, security_pwd: str) -> bool:
-        if account in self.accounts:
-            return False
-        self.accounts[account] = {
-            "password": password,
-            "security_password": security_pwd,
-            "create_time": datetime.now()
-        }
-        return True
-
-db = Database()
-
 def get_db_connection():
     """创建数据库连接"""
     try:
@@ -161,8 +115,9 @@ async def handle_request(request: Request):
                     announcements = [line.strip() for line in f.readlines() if line.strip()]
             except Exception as e:
                 print(f"读取公告文件失败: {e}")
-                announcements = ["暂无公告"]
-            
+                announcements = ["暂无公告"]           
+
+
             return JSONResponse(content={
                 "status": "正常运行" if CONFIG.get("gameserver_online", 0) == 1 else "离线",
                 "online_count": CONFIG.get("online_count", 0),
@@ -194,8 +149,6 @@ async def handle_request(request: Request):
                     if account_id:
                         # 更新安全密码
                         if update_account_security_pwd(account_id, security_pwd):
-                            # 将账号信息保存到本地数据库
-                            db.add_account(account, password, security_pwd)
                             return JSONResponse(content={
                                 "success": True, 
                                 "message": "注册功"
@@ -216,34 +169,6 @@ async def handle_request(request: Request):
                 raise
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
-
-        elif opcode == Opcodes.LOGIN_ACCOUNT:
-            account = data["account"]
-            password = data["password"]
-            
-            if account in db.accounts and db.accounts[account]["password"] == password:
-                return JSONResponse(content={"success": True, "message": "登录成功"})
-            else:
-                raise HTTPException(status_code=401, detail="账号或密码错误")
-
-        elif opcode == Opcodes.CHECK_VERSION:
-            return JSONResponse(content={
-                "needs_update": False,
-                "current_version": "3.3.5a",
-                "patch_list": []
-            })
-
-        elif opcode == Opcodes.UNLOCK_CHARACTER:
-            account = data["account"]
-            character_name = data["character_name"]
-            
-            if account in db.accounts:
-                return JSONResponse(content={
-                    "success": True,
-                    "message": f"角色 {character_name} 已解锁"
-                })
-            else:
-                raise HTTPException(status_code=404, detail="账号不存在")
 
         elif opcode == Opcodes.CHANGE_PASSWORD:
             account = data["account"]
@@ -856,14 +781,6 @@ class ServerUI(QMainWindow):
         self.log_message(f"执行命令: {command}")
         self.log_message(f"执行结果: {result}")
         return result
-
-    def setup_server_status_monitor(self):
-        """置服务器状态监控"""
-        self.status_timer = QTimer()
-        self.status_timer.timeout.connect(self.check_server_status)
-        self.status_timer.start(10000)  # 每10秒检查一
-        # 立即执行一次检查
-        QTimer.singleShot(0, self.check_server_status)
         
     def check_server_status(self):
         """检查游戏服务器状态"""
@@ -874,7 +791,7 @@ class ServerUI(QMainWindow):
         if "SOAP错误" in result or "连接错误" in result:
             CONFIG["gameserver_online"] = 0  # 改为扁化结构
             CONFIG["online_count"] = 0
-            self.log_message("游戏服务器离")
+            self.log_message("游戏服务器离线")
         else:
             try:
                 # 解析在线人数息
