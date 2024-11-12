@@ -699,6 +699,7 @@ class ServerUI(QMainWindow):
                 "online_count": CONFIG.get("online_count", 0),
                 "force_wow": int(self.force_wow.text()),  # 确保是整数
                 "force_mpq": int(self.force_mpq.text()),  # 确保是整数
+                "check_update_before_play": int(self.check_update.text()),  # 确保是整数
                 
                 "soap_ip": self.soap_ip.text(),
                 "soap_port": self.soap_port.text(),
@@ -714,15 +715,10 @@ class ServerUI(QMainWindow):
                 "mysql_user": self.mysql_user.text(),
                 "mysql_password": self.mysql_pass.text(),
                 "mysql_database": self.mysql_database.text(),
-                
-                "check_update_before_play": int(self.check_update.text())
             }
             
             # 打印要保存的配置
             self.log_message(f"要保存的配置:")
-            self.log_message(f"force_wow: {config['force_wow']}")
-            self.log_message(f"force_mpq: {config['force_mpq']}")
-            self.log_message(f"check_update_before_play: {config['check_update_before_play']}")
 
             if save_config(config):
                 # 更新全局配置
@@ -731,7 +727,7 @@ class ServerUI(QMainWindow):
                 
                 # 保存到文件
                 if save_config(config):
-                    self.log_message("配置已保存")
+                    self.log_message("配置已保存")             
                     QMessageBox.information(self, "成功", "配置已保存")
                 else:
                     QMessageBox.warning(self, "错误", "保存配置失败")
