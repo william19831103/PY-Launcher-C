@@ -19,11 +19,15 @@ import urllib.parse
 class WowLauncher(QMainWindow):
     def __init__(self):
         super().__init__()
-        # 设置窗口标题和大小
+        
+        # 1. 首先加载配置文件
+        self.load_config()
+        
+        # 2. 设置窗口标题和大小
         self.setWindowTitle("连接中...")  # 初始标题，等待从服务器获取
         self.setFixedSize(1228, 921)
 
-        # 初始化全局变量
+        # 3. 初始化全局变量
         self.wow_ip = "127.0.0.1"
         self.wow_port = "3724" 
         self.login_title = "XX魔兽"
@@ -33,11 +37,11 @@ class WowLauncher(QMainWindow):
         self.check_update_before_play = 1
         self.announcements = ["暂无公告"]
         
-        # 创建事件循环
+        # 4. 创建事件循环
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         
-        # 添加背景图片
+        # 5. 添加背景图片
         self.background = QLabel(self)
         self.background.setGeometry(0, 0, 1228, 921)
         self.background.setPixmap(QPixmap("bg.jpg").scaled(
@@ -47,16 +51,40 @@ class WowLauncher(QMainWindow):
             Qt.SmoothTransformation
         ))
 
+        # 6. 设置UI
         self.setup_ui()
         
-        # 启动时立即获取服务器信息和状态
+        # 7. 启动时立即获取服务器信息和状态
         self.loop.run_until_complete(self.initial_update())
         
-        # 创建定时器定期更新服务器状态
+        # 8. 创建定时器定期更新服务器状态
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_server_status)
         self.timer.start(60000)  # 每60秒更新一次
 
+    def load_config(self):
+        """从配置文件加载服务器连接信息"""
+        try:
+            config_path = 'launcher_config.json'
+            print(f"正在加载配置文件: {config_path}")
+            
+            if not os.path.exists(config_path):
+                print(f"配置文件不存在: {config_path}")
+                raise FileNotFoundError(f"配置文件不存在: {config_path}")
+                
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                self.api_host = config.get('api_host', 'localhost')
+                self.api_port = config.get('api_port', '8080')
+                self.api_base_url = f"http://{self.api_host}:{self.api_port}"
+                print(f"成功加载服务器配置: {self.api_base_url}")
+        except Exception as e:
+            print(f"加载配置文件失败: {str(e)}")
+            print("使用默认配置")
+            # 使用默认值
+            self.api_host = 'localhost'
+            self.api_port = '8080'
+            self.api_base_url = f"http://{self.api_host}:{self.api_port}"
 
     async def initial_update(self):
         """启动时的初始更新"""
@@ -255,7 +283,8 @@ class WowLauncher(QMainWindow):
         """发送网络请求的通用方法"""
         try:
             async with aiohttp.ClientSession() as session:
-                url = f"http://localhost:8080/api"
+                # 使用配置的 API URL
+                url = f"{self.api_base_url}/api"
                 headers = {
                     "Content-Type": "application/json",
                     "Accept": "application/json"
@@ -320,7 +349,7 @@ class WowLauncher(QMainWindow):
             self.info_box.setText("无法获取服务器状态")
 
     async def _async_update_server_status(self):
-        """异��更新服务器状态"""
+        """异更新服务器状态"""
         try:
             response = await self.send_request(Opcodes.SERVER_STATUS)
             if response:
@@ -359,7 +388,7 @@ class WowLauncher(QMainWindow):
                         
     def open_change_pwd(self):
         dialog = ChangePasswordDialog(self)
-        # 将对话框移动到主窗口中���
+        # 将对话框移动到主窗口中
         dialog.move(self.geometry().center() - dialog.rect().center())
         dialog.exec_()
     
@@ -419,7 +448,8 @@ class WowLauncher(QMainWindow):
 
             # 获取服务器文件列表和更新选项
             async with aiohttp.ClientSession() as session:
-                async with session.get("http://localhost:8080/check_update") as response:
+                # 用配置的 API URL
+                async with session.get(f"{self.api_base_url}/check_update") as response:
                     if response.status == 200:
                         data = await response.json()
                         server_files = data["files"] 
@@ -605,7 +635,8 @@ class WowLauncher(QMainWindow):
         """获取服务器信息"""
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get("http://localhost:8080/server_info") as response:
+                # 使用配���的 API URL
+                async with session.get(f"{self.api_base_url}/server_info") as response:
                     if response.status == 200:
                         data = await response.json()
                         # 更新UI
@@ -884,7 +915,7 @@ class RegisterDialog(BaseServiceDialog):
                         hint_text="*欢迎使用账号注册服务,请务必牢记账号密码")
         
     def _setup_inputs(self):
-        self.account_input = self._create_input("账号名称", "4-12位数字和字母")
+        self.account_input = self._create_input("账���名称", "4-12位数字和字母")
         self.password_input = self._create_input("输入密码", "4-12位数字和字母")
         self.confirm_pwd_input = self._create_input("确认密码", "两次输入的密码")
         self.security_pwd_input = self._create_input("安全密码", "1-8位数字和字母")
