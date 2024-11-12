@@ -15,6 +15,7 @@ import asyncio
 import hashlib
 from pathlib import Path
 import urllib.parse
+import psutil
 
 class WowLauncher(QMainWindow):
     def __init__(self):
@@ -445,6 +446,29 @@ class WowLauncher(QMainWindow):
             # 获取客户端根目录
             client_root = os.path.dirname(os.path.abspath(__file__))
             self.log_message(f"客户端目录: {client_root}")
+            # 检查wow.exe是否在运行
+            def is_wow_running():
+                # 获取当前文件所在目录的绝对路径
+                current_dir = os.path.dirname(os.path.abspath(__file__))  
+                # 构建当前目录下的 Wow.exe 路径
+                wow_exe_path = os.path.join(current_dir, 'Wow.exe')  
+
+                # 获取进程的执行路径和PID
+                for proc in psutil.process_iter(['pid', 'exe']):  
+                    try:
+                        if proc.info['exe'] and os.path.abspath(proc.info['exe']).lower() == wow_exe_path.lower():
+                            return True
+                    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                        pass
+                return False
+                
+            if is_wow_running():
+                self.log_message("检测到游戏正在运行")
+                self.progress.hide()
+                self.update_btn.setEnabled(True)
+                self.start_btn.setEnabled(True)
+                QMessageBox.warning(self, "错误", "请先关闭游戏客户端再进行更新")
+                return
 
             # 获取服务器文件列表和更新选项
             async with aiohttp.ClientSession() as session:
