@@ -668,7 +668,7 @@ class WowLauncher(QMainWindow):
         """获取服务器信息"""
         try:
             async with aiohttp.ClientSession() as session:
-                # 使用配���的 API URL
+                # 使用配的 API URL
                 async with session.get(f"{self.api_base_url}/server_info") as response:
                     if response.status == 200:
                         data = await response.json()
@@ -718,7 +718,7 @@ class WowLauncher(QMainWindow):
             print(f"更新服务器信息失败: {str(e)}")
 
     def log_message(self, message):
-        """添加日志消息到信息框"""
+        """���加日志消息到信息框"""
         current_text = self.info_box.toPlainText()
         if current_text:
             current_text += "\n"
@@ -735,6 +735,43 @@ class WowLauncher(QMainWindow):
         """窗口关闭时清理事件循环"""
         self.loop.close()
         super().closeEvent(event)
+
+    async def register_account(self, account, password, security_pwd):
+        """发送注册账号请求"""
+        try:
+            # 准备请求数据
+            data = {
+                "account": account,
+                "password": password,
+                "security_password": security_pwd
+            }
+            
+            # 发送请求
+            response = await self.send_request(Opcodes.REGISTER_ACCOUNT, data)
+            
+            if response:
+                if response.get("success"):
+                    return {
+                        "success": True,
+                        "detail": "注册成功"
+                    }
+                else:
+                    return {
+                        "success": False, 
+                        "detail": response.get("detail", "注册失败")
+                    }
+            else:
+                return {
+                    "success": False,
+                    "detail": "服务器无响应"
+                }
+                
+        except Exception as e:
+            print(f"注册账号时发生错误: {str(e)}")
+            return {
+                "success": False,
+                "detail": str(e)
+            }
 
 # 首先创建一个基类
 class BaseServiceDialog(QDialog):
@@ -948,7 +985,7 @@ class RegisterDialog(BaseServiceDialog):
                         hint_text="*欢迎使用账号注册服务,请务必牢记账号密码")
         
     def _setup_inputs(self):
-        self.account_input = self._create_input("账���名称", "4-12位数字和字母")
+        self.account_input = self._create_input("账号名称", "4-12位数字和字母")
         self.password_input = self._create_input("输入密码", "4-12位数字和字母")
         self.confirm_pwd_input = self._create_input("确认密码", "两次输入的密码")
         self.security_pwd_input = self._create_input("安全密码", "1-8位数字和字母")
@@ -977,15 +1014,24 @@ class RegisterDialog(BaseServiceDialog):
             if not self._validate_input(account, password, confirm_pwd, security_pwd, captcha):
                 return
                 
-            # 发送注册请求
-            response = self.parent().register_account(account, password, security_pwd)
+            # 创建事件循环
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             
-            if response.get("success"):
-                QMessageBox.information(self, "成功", "账号注册成功!")
-                super().accept()
-            else:
-                error_msg = response.get("detail", "注册失败")
-                QMessageBox.warning(self, "错误", error_msg)
+            try:
+                # 获取 WowLauncher 实例并发送注册请求
+                launcher = self.parent()
+                response = loop.run_until_complete(launcher.register_account(account, password, security_pwd))
+                
+                if response.get("success"):
+                    QMessageBox.information(self, "成功", "账号注册成功!")
+                    super().accept()
+                else:
+                    error_msg = response.get("detail", "注册失败")
+                    QMessageBox.warning(self, "错误", error_msg)
+                    
+            finally:
+                loop.close()
                 
         except Exception as e:
             QMessageBox.warning(self, "错误", f"注册失败: {str(e)}")
