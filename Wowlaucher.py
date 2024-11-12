@@ -718,7 +718,7 @@ class WowLauncher(QMainWindow):
             print(f"更新服务器信息失败: {str(e)}")
 
     def log_message(self, message):
-        """���加日志消息到信息框"""
+        """加日志消息到信息框"""
         current_text = self.info_box.toPlainText()
         if current_text:
             current_text += "\n"
@@ -768,6 +768,43 @@ class WowLauncher(QMainWindow):
                 
         except Exception as e:
             print(f"注册账号时发生错误: {str(e)}")
+            return {
+                "success": False,
+                "detail": str(e)
+            }
+
+    async def change_password(self, account, security_pwd, new_password):
+        """发送修改密码请求"""
+        try:
+            # 准备请求数据
+            data = {
+                "account": account,
+                "new_password": new_password,
+                "security_password": security_pwd
+            }
+            
+            # 发送请求
+            response = await self.send_request(Opcodes.CHANGE_PASSWORD, data)
+            
+            if response:
+                if response.get("success"):
+                    return {
+                        "success": True,
+                        "detail": "修改密码成功"
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "detail": response.get("detail", "修改密码失败")
+                    }
+            else:
+                return {
+                    "success": False,
+                    "detail": "服务器无响应"
+                }
+                
+        except Exception as e:
+            print(f"修改密码时发生错误: {str(e)}")
             return {
                 "success": False,
                 "detail": str(e)
@@ -1108,14 +1145,24 @@ class ChangePasswordDialog(BaseServiceDialog):
             if not self._validate_input(account, new_password, security_pwd, captcha):
                 return
                 
-            response = self.parent().change_password(account, security_pwd, new_password)
+            # 创建事件循环
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             
-            if response.get("success"):
-                QMessageBox.information(self, "成功", "密码修改成功!")
-                super().accept()
-            else:
-                error_msg = response.get("detail", "修改密码失败")
-                QMessageBox.warning(self, "错误", error_msg)
+            try:
+                # 获取 WowLauncher 实例并发送修改密码请求
+                launcher = self.parent()
+                response = loop.run_until_complete(launcher.change_password(account, security_pwd, new_password))
+                
+                if response.get("success"):
+                    QMessageBox.information(self, "成功", "密码修改成功!")
+                    super().accept()
+                else:
+                    error_msg = response.get("detail", "修改密码失败")
+                    QMessageBox.warning(self, "错误", error_msg)
+                    
+            finally:
+                loop.close()
                 
         except Exception as e:
             QMessageBox.warning(self, "错误", f"修改密码失败: {str(e)}")
