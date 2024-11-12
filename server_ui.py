@@ -24,6 +24,7 @@ import urllib.parse
 import mysql.connector
 from mysql.connector import Error
 import random
+from mpq_encryptor import MPQEncryptor  # 添加导入
 
 # 在文件开头添加一个全局变量来存储白名单
 GLOBAL_MPQ_WHITELIST = set()
@@ -911,15 +912,93 @@ class ServerUI(QMainWindow):
 
     def encrypt_patch(self):
         """加密补丁功能"""
-        self.log_message("加密补丁功能待实现")
-        # TODO: 等待具体加密算法实现
-        QMessageBox.information(self, "提示", "加密补丁功能待实现")
+        try:
+            # 获取加密密钥
+            key = self.encryption_key.text()
+            if not key:
+                QMessageBox.warning(self, "错误", "请先设置加密密钥")
+                return
+
+            # 创建加密器实例
+            encryptor = MPQEncryptor(key)
+            
+            # 获取Data目录路径
+            data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Download", "Data")
+            if not os.path.exists(data_path):
+                QMessageBox.warning(self, "错误", "Data目录不存在")
+                return
+
+            # 统计处理结果
+            success_count = 0
+            fail_count = 0
+            
+            # 处理所有MPQ文件
+            for file in os.listdir(data_path):
+                if file.lower().endswith('.mpq'):
+                    file_path = os.path.join(data_path, file)
+                    self.log_message(f"正在加密: {file}")
+                    
+                    if encryptor.encrypt_file(file_path):
+                        success_count += 1
+                        self.log_message(f"加密成功: {file}")
+                    else:
+                        fail_count += 1
+                        self.log_message(f"加密失败: {file}")
+
+  
+            html_message = f"加密完成<br>成功: {success_count} 个文件<br>失败: {fail_count} 个文件"
+            self.log_message(html_message)
+            QMessageBox.information(self, "加密完成!", "加密完成!")
+
+        except Exception as e:
+            error_msg = f"加密过程出错: {str(e)}"
+            self.log_message(error_msg)
+            QMessageBox.warning(self, "错误", error_msg)
 
     def decrypt_patch(self):
         """解密补丁功能"""
-        self.log_message("解密补丁功能待实现")
-        # TODO: 等待具体解密算法实现
-        QMessageBox.information(self, "提示", "解密补丁功能待实现")
+        try:
+            # 获取加密密钥
+            key = self.encryption_key.text()
+            if not key:
+                QMessageBox.warning(self, "错误", "请先设置加密密钥")
+                return
+
+            # 创建加密器实例
+            encryptor = MPQEncryptor(key)
+            
+            # 获取Data目录路径
+            data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Download", "Data")
+            if not os.path.exists(data_path):
+                QMessageBox.warning(self, "错误", "Data目录不存在")
+                return
+
+            # 统计处理结果
+            success_count = 0
+            fail_count = 0
+            
+            # 处理所有MPQ文件
+            for file in os.listdir(data_path):
+                if file.lower().endswith('.mpq'):
+                    file_path = os.path.join(data_path, file)
+                    self.log_message(f"正在解密: {file}")
+                    
+                    if encryptor.decrypt_file(file_path):
+                        success_count += 1
+                        self.log_message(f"解密成功: {file}")
+                    else:
+                        fail_count += 1
+                        self.log_message(f"解密失败: {file}")
+
+            # 显示结果
+            message = f"解密完成\n成功: {success_count} 个文件\n失败: {fail_count} 个文件"
+            self.log_message(message)
+            QMessageBox.information(self, "解密完成!", "解密完成!")
+
+        except Exception as e:
+            error_msg = f"解密过程出错: {str(e)}"
+            self.log_message(error_msg)
+            QMessageBox.warning(self, "错误", error_msg)
 
 
 # 添加新的API路由
