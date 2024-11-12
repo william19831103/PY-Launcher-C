@@ -267,8 +267,9 @@ class ServerUI(QMainWindow):
 
     def setup_ui(self):
         # 设置窗口基本属性
-        self.setWindowTitle("无限魔兽务器管理")
-        self.setFixedSize(800, 600)
+        self.setWindowTitle("无限魔兽服务器管理")
+        # 将窗口尺寸增加30%
+        self.setFixedSize(1080, 960)  # 原来是 800, 600
         
         # 设窗口样式
         self.setStyleSheet("""
@@ -277,21 +278,23 @@ class ServerUI(QMainWindow):
             }
             QLabel {
                 color: white;
-                font-size: 14px;
+                font-size: 18px;  /* 原来是 14px */
             }
             QLineEdit {
                 background-color: #2a2a2a;
                 color: white;
                 border: 1px solid #3498db;
-                padding: 5px;
-                border-radius: 3px;
+                padding: 7px;  /* 原来是 5px */
+                border-radius: 4px;  /* 原来是 3px */
+                font-size: 16px;  /* 新增字体大小 */
             }
             QPushButton {
                 background-color: #3498db;
                 color: white;
                 border: none;
-                padding: 8px 15px;
-                border-radius: 3px;
+                padding: 10px 20px;  /* 原来是 8px 15px */
+                border-radius: 4px;
+                font-size: 16px;  /* 新增字体大小 */
             }
             QPushButton:hover {
                 background-color: #2980b9;
@@ -303,7 +306,8 @@ class ServerUI(QMainWindow):
                 background-color: #2a2a2a;
                 color: white;
                 border: 1px solid #3498db;
-                border-radius: 3px;
+                border-radius: 4px;
+                font-size: 16px;  /* 新增字体大小 */
             }
         """)
 
@@ -335,98 +339,115 @@ class ServerUI(QMainWindow):
         # 登录端口
         config_layout.addWidget(QLabel("登录端口:"), 0, 0)
         self.login_port = QLineEdit()
-        self.login_port.setFixedWidth(100)
+        self.login_port.setFixedWidth(130)
         config_layout.addWidget(self.login_port, 0, 1)
 
         # WOW服务器IP
         config_layout.addWidget(QLabel("WOW服务器IP:"), 1, 0)
         self.wow_ip = QLineEdit()
-        self.wow_ip.setFixedWidth(100)
+        self.wow_ip.setFixedWidth(130)
         config_layout.addWidget(self.wow_ip, 1, 1)
 
         # WOW端口号
         config_layout.addWidget(QLabel("WOW端口号:"), 2, 0)
         self.wow_port = QLineEdit()
-        self.wow_port.setFixedWidth(100)
+        self.wow_port.setFixedWidth(130)
         config_layout.addWidget(self.wow_port, 2, 1)
 
         # 服务器名称
         config_layout.addWidget(QLabel("服务器称:"), 3, 0)
         self.server_title = QLineEdit()
-        self.server_title.setFixedWidth(200)
+        self.server_title.setFixedWidth(260)
         config_layout.addWidget(self.server_title, 3, 1)
 
         # SOAP配置
         config_layout.addWidget(QLabel("SOAP服务器IP:"), 0, 2)
         self.soap_ip = QLineEdit()
-        self.soap_ip.setFixedWidth(100)
+        self.soap_ip.setFixedWidth(130)
         config_layout.addWidget(self.soap_ip, 0, 3)
 
         config_layout.addWidget(QLabel("SOAP端口号:"), 1, 2)
         self.soap_port = QLineEdit()
-        self.soap_port.setFixedWidth(100)
+        self.soap_port.setFixedWidth(130)
         config_layout.addWidget(self.soap_port, 1, 3)
 
         config_layout.addWidget(QLabel("SOAP用户名:"), 2, 2)
         self.soap_user = QLineEdit()
-        self.soap_user.setFixedWidth(100)
+        self.soap_user.setFixedWidth(130)
         config_layout.addWidget(self.soap_user, 2, 3)
 
         config_layout.addWidget(QLabel("SOAP密码:"), 3, 2)
         self.soap_pass = QLineEdit()
-        self.soap_pass.setFixedWidth(100)
+        self.soap_pass.setFixedWidth(130)
         config_layout.addWidget(self.soap_pass, 3, 3)
 
         # 强制更新WOW.EXE
         config_layout.addWidget(QLabel("更新根目录WOW.EXE等(0/1):"), 4, 0)
         self.force_wow = QLineEdit()
-        self.force_wow.setFixedWidth(100)
+        self.force_wow.setFixedWidth(130)
         config_layout.addWidget(self.force_wow, 4, 1)
 
         # 强制删除无关MPQ
         config_layout.addWidget(QLabel("强制删除无关MPQ(0/1):"), 4, 2)
         self.force_mpq = QLineEdit()
-        self.force_mpq.setFixedWidth(100)
+        self.force_mpq.setFixedWidth(130)
         config_layout.addWidget(self.force_mpq, 4, 3)
 
-        # 启动前检查更新 - 移动到这里
-        config_layout.addWidget(QLabel("启动前检查更新(0/1):"), 5, 0)
+        # 开始游戏前检更新 - 移动到这
+        config_layout.addWidget(QLabel("开始游戏前检查更新(0/1):"), 5, 0)
         self.check_update = QLineEdit()
-        self.check_update.setFixedWidth(100)
+        self.check_update.setFixedWidth(130)
         config_layout.addWidget(self.check_update, 5, 1)
 
-        # MySQL配置标题
-        config_layout.addWidget(QLabel("MySQL配置"), 6, 0, 1, 4)
+        # 加解密相关配置
+        config_layout.addWidget(QLabel("加解密秘钥:"), 5, 2)
+        self.encryption_key = QLineEdit()
+        self.encryption_key.setFixedWidth(130)
+        config_layout.addWidget(self.encryption_key, 5, 3)
+
+        # 将加密补���和解密补丁改为按钮
+        self.encryption_btn = QPushButton("加密补丁")
+        self.encryption_btn.setFixedWidth(130)
+        self.encryption_btn.clicked.connect(self.encrypt_patch)
+        config_layout.addWidget(self.encryption_btn, 6, 0)
+
+        self.decryption_btn = QPushButton("解密补丁")
+        self.decryption_btn.setFixedWidth(130)
+        self.decryption_btn.clicked.connect(self.decrypt_patch)
+        config_layout.addWidget(self.decryption_btn, 6, 2)
+
+        # MySQL配置标题 (原来的行号需要相应调整)
+        config_layout.addWidget(QLabel("MySQL配置"), 7, 0, 1, 4)
 
         # MySQL主机
-        config_layout.addWidget(QLabel("MySQL主机:"), 7, 0)
+        config_layout.addWidget(QLabel("MySQL主机:"), 8, 0)
         self.mysql_host = QLineEdit()
-        self.mysql_host.setFixedWidth(100)
-        config_layout.addWidget(self.mysql_host, 7, 1)
+        self.mysql_host.setFixedWidth(130)
+        config_layout.addWidget(self.mysql_host, 8, 1)
 
         # MySQL端口
-        config_layout.addWidget(QLabel("MySQL端口:"), 7, 2)
+        config_layout.addWidget(QLabel("MySQL端口:"), 8, 2)
         self.mysql_port = QLineEdit()
-        self.mysql_port.setFixedWidth(100)
-        config_layout.addWidget(self.mysql_port, 7, 3)
+        self.mysql_port.setFixedWidth(130)
+        config_layout.addWidget(self.mysql_port, 8, 3)
 
         # MySQL用户名
-        config_layout.addWidget(QLabel("MySQL用户名:"), 8, 0)
+        config_layout.addWidget(QLabel("MySQL用户名:"), 9, 0)
         self.mysql_user = QLineEdit()
-        self.mysql_user.setFixedWidth(100)
-        config_layout.addWidget(self.mysql_user, 8, 1)
+        self.mysql_user.setFixedWidth(130)
+        config_layout.addWidget(self.mysql_user, 9, 1)
 
         # MySQL密码
-        config_layout.addWidget(QLabel("MySQL密码:"), 8, 2)
+        config_layout.addWidget(QLabel("MySQL密码:"), 9, 2)
         self.mysql_pass = QLineEdit()
-        self.mysql_pass.setFixedWidth(100)
-        config_layout.addWidget(self.mysql_pass, 8, 3)
+        self.mysql_pass.setFixedWidth(130)
+        config_layout.addWidget(self.mysql_pass, 9, 3)
 
         # MySQL数据库名
-        config_layout.addWidget(QLabel("数据库名:"), 9, 0)
+        config_layout.addWidget(QLabel("数据库名:"), 10, 0)
         self.mysql_database = QLineEdit()
-        self.mysql_database.setFixedWidth(100)
-        config_layout.addWidget(self.mysql_database, 9, 1)
+        self.mysql_database.setFixedWidth(130)
+        config_layout.addWidget(self.mysql_database, 10, 1)
 
 
 
@@ -456,7 +477,7 @@ class ServerUI(QMainWindow):
         # 状态栏
         status_layout = QHBoxLayout()
         
-        self.status_label = QLabel("服务器状: 已停止")
+        self.status_label = QLabel("服务器状态: 已停止")
         status_layout.addWidget(self.status_label)
         
         status_layout.addStretch()
@@ -471,58 +492,6 @@ class ServerUI(QMainWindow):
         status_layout.addWidget(self.start_btn)
         
         layout.addLayout(status_layout)
-
-        # 在功能按钮区域上方添加选项
-        options_container = QWidget(self)
-        options_container.setGeometry(60, 640, 1108, 40)  # 调整位置
-        options_layout = QHBoxLayout(options_container)
-        options_layout.setSpacing(30)
-
-        # 强制更新WOW.EXE选项
-        self.force_wow_check = QCheckBox("强制更新WOW.EXE", options_container)
-        self.force_wow_check.setStyleSheet("""
-            QCheckBox {
-                color: white;
-                font-size: 14px;
-            }
-            QCheckBox::indicator {
-                width: 20px;
-                height: 20px;
-            }
-            QCheckBox::indicator:unchecked {
-                border: 2px solid #3498db;
-                background: transparent;
-            }
-            QCheckBox::indicator:checked {
-                border: 2px solid #3498db;
-                background: #3498db;
-            }
-        """)
-        self.force_wow_check.stateChanged.connect(self.on_force_wow_changed)
-        options_layout.addWidget(self.force_wow_check)
-
-        # 强制删除无关MPQ选项
-        self.force_mpq_check = QCheckBox("强制删无关MPQ", options_container)
-        self.force_mpq_check.setStyleSheet("""
-            QCheckBox {
-                color: white;
-                font-size: 14px;
-            }
-            QCheckBox::indicator {
-                width: 20px;
-                height: 20px;
-            }
-            QCheckBox::indicator:unchecked {
-                border: 2px solid #3498db;
-                background: transparent;
-            }
-            QCheckBox::indicator:checked {
-                border: 2px solid #3498db;
-                background: #3498db;
-            }
-        """)
-        self.force_mpq_check.stateChanged.connect(self.on_force_mpq_changed)    
-
 
     def log_message(self, message):
         """添加日志消息"""
@@ -593,7 +562,7 @@ class ServerUI(QMainWindow):
 
     def load_saved_config(self):
         """加载保存的配置"""
-        config = CONFIG  # 使用全局配置对象
+        config = CONFIG
         
         # 从扁平化配置中加载值
         self.login_port.setText(str(config.get("server_port", 8080)))
@@ -615,14 +584,14 @@ class ServerUI(QMainWindow):
         self.mysql_pass.setText(config.get("mysql_password", "root"))
         self.mysql_database.setText(config.get("mysql_database", "realmd"))
 
-        # 添加新配置的加载
-
+        # 只保留加密秘钥的加载
+        self.encryption_key.setText(config.get("encryption_key", ""))
+        
         self.log_message("配置已加载")
 
     def save_current_config(self):
         """保存当前配置"""
         try:
-            # 使用扁平化的配置结构
             config = {
                 "server_host": "0.0.0.0",
                 "server_port": int(self.login_port.text()),
@@ -651,6 +620,12 @@ class ServerUI(QMainWindow):
                 "mysql_user": self.mysql_user.text(),
                 "mysql_password": self.mysql_pass.text(),
                 "mysql_database": self.mysql_database.text(),
+                
+                "encryption_key": self.encryption_key.text(),
+                
+                "jwt_secret": CONFIG.get("jwt_secret", "your-secret-key"),
+                "token_expire_minutes": CONFIG.get("token_expire_minutes", 60),
+                "max_login_attempts": CONFIG.get("max_login_attempts", 5)
             }
             
             # 打印要保存的配置
@@ -741,7 +716,7 @@ class ServerUI(QMainWindow):
             # 创建认证字符串
             auth_str = base64.b64encode(f"{soap_user}:{soap_pass}".encode()).decode()
             
-            # 创建连接并设置超时
+            # 创建接并设置超时
             conn = http.client.HTTPConnection(soap_ip, soap_port, timeout=30)
             
             # 设置请求头，添加认证信息
@@ -759,7 +734,7 @@ class ServerUI(QMainWindow):
             response = conn.getresponse()
             data = response.read().decode()
             
-            # 处理响应
+            # 处理应
             self.log_message(f"SOAP响应状态: {response.status} {response.reason}")
             result = self.parse_soap_response(data)
             self.log_message(f"SOAP响应结果: {result}")
@@ -806,7 +781,7 @@ class ServerUI(QMainWindow):
                     # 提取当前在线人数
                     online_count = int(result.split("Players online:")[1].split("(")[0].strip())
                     CONFIG["online_count"] = online_count
-                    self.log_message(f"游戏服务器在线，当前在线人数: {online_count}")
+                    self.log_message(f"游戏服务���在线，当前在线人数: {online_count}")
                 else:
                     CONFIG["gameserver_online"] = 0
                     CONFIG["online_count"] = 0
@@ -887,9 +862,9 @@ class ServerUI(QMainWindow):
     def on_save_clicked(self):
         """保存按钮点击处理"""
         try:
-            # 直接从复选框获取当前状态
-            force_wow = 1 if self.force_wow_check.isChecked() else 0
-            force_mpq = 1 if self.force_mpq_check.isChecked() else 0
+            # 从输入框获取值，而不是复选框
+            force_wow = int(self.force_wow.text())
+            force_mpq = int(self.force_mpq.text())
             
             self.log_message(f"保存配置 - 强制更新WOW: {force_wow}, 强制删除MPQ: {force_mpq}")
             
@@ -934,6 +909,18 @@ class ServerUI(QMainWindow):
             self.log_message(f"保存配置时发生错误: {str(e)}")
             QMessageBox.warning(self, "错误", f"保存配置失败: {str(e)}")
 
+    def encrypt_patch(self):
+        """加密补丁功能"""
+        self.log_message("加密补丁功能待实现")
+        # TODO: 等待具体加密算法实现
+        QMessageBox.information(self, "提示", "加密补丁功能待实现")
+
+    def decrypt_patch(self):
+        """解密补丁功能"""
+        self.log_message("解密补丁功能待实现")
+        # TODO: 等待具体解密算法实现
+        QMessageBox.information(self, "提示", "解密补丁功能待实现")
+
 
 # 添加新的API路由
 @api_app.get("/check_update")
@@ -957,7 +944,7 @@ async def check_update():
                 
                 # 根据不同目录和配置决定是否加文件
                 if relative_path.startswith('Wow/'):
-                    # Wow目录下的文件只在force_wow=1时添加
+                    # Wow目录下的文件只在force_wow=1添加
                     if int(CONFIG.get("force_wow", 0)) == 1:
                         print(f"添加Wow目录文件: {relative_path}")
                         files_info[relative_path] = {
@@ -969,7 +956,7 @@ async def check_update():
                             'is_data_file': False
                         }
                 elif relative_path.startswith('Data/'):
-                    # Data目录下的文件始终添
+                    # Data目录下的文件始终添加
                     file_lower = file.lower()
                     is_mpq = file_lower.endswith('.mpq')
                     in_whitelist = file_lower in mpq_whitelist if is_mpq else False
