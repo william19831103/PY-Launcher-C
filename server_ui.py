@@ -151,7 +151,7 @@ async def handle_request(request: Request):
                         if update_account_security_pwd(account_id, security_pwd):
                             return JSONResponse(content={
                                 "success": True, 
-                                "message": "注册功"
+                                "message": "注册成功"
                             })
                         else:
                             raise HTTPException(status_code=500, detail="更新安全密码失败")
@@ -969,7 +969,7 @@ async def check_update():
                             'is_data_file': False
                         }
                 elif relative_path.startswith('Data/'):
-                    # Data目录下的文件始终添���
+                    # Data目录下的文件始终添
                     file_lower = file.lower()
                     is_mpq = file_lower.endswith('.mpq')
                     in_whitelist = file_lower in mpq_whitelist if is_mpq else False
