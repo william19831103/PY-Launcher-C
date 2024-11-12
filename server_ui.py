@@ -299,22 +299,25 @@ async def handle_request(request: Request):
 @api_app.get("/server_info")
 async def get_server_info():
     """获取服务器信息"""
-    try:
-        # 每次请求时重新读取公告
+    try: 
+        # 加载公告
         try:
             with open('G.txt', 'r', encoding='utf-8') as f:
                 announcements = [line.strip() for line in f.readlines() if line.strip()]
         except Exception as e:
             print(f"读取公告文件失败: {e}")
             announcements = ["暂无公告"]
-            
+
         server_info = {
             "wow_ip": CONFIG.get("wow_ip", "127.0.0.1"),
             "wow_port": CONFIG.get("wow_port", "3724"),
-            "login_title": CONFIG.get("server_title", "无限魔兽"),
+            "login_title": CONFIG.get("server_title", "XX魔兽"),
             "status": "正常运行" if CONFIG.get("gameserver_online", 0) == 1 else "离线",
             "online_count": CONFIG.get("online_count", 0),
-            "announcements": announcements  # 使用刚读取的公告
+            "force_wow": CONFIG.get("force_wow", 0),
+            "force_mpq": CONFIG.get("force_mpq", 0),
+            "check_update_before_play": (CONFIG.get("check_update_before_play", 1)),
+            "announcements": announcements,  
         }
         return JSONResponse(content=server_info)
         
@@ -329,6 +332,9 @@ class ServerUI(QMainWindow):
         self.server_running = False
         self.download_path = "Download"
         self.setup_ui()
+        # 初始化时加载公告到全局变量
+        global Announcements
+
         self.load_saved_config()
         # 初始化时加载白名单到全局变量
         global GLOBAL_MPQ_WHITELIST
@@ -670,6 +676,7 @@ class ServerUI(QMainWindow):
         self.soap_pass.setText(config.get("soap_password", "1"))
         self.force_wow.setText(str(config.get("force_wow", 0)))
         self.force_mpq.setText(str(config.get("force_mpq", 0)))
+        self.check_update.setText(str(config.get("check_update_before_play", 1)))
         
         # 加载MySQL配置
         self.mysql_host.setText(config.get("mysql_host", "127.0.0.1"))
@@ -677,10 +684,9 @@ class ServerUI(QMainWindow):
         self.mysql_user.setText(config.get("mysql_user", "root"))
         self.mysql_pass.setText(config.get("mysql_password", "root"))
         self.mysql_database.setText(config.get("mysql_database", "realmd"))
-        
+
         # 添加新配置的加载
-        self.check_update.setText(str(config.get("check_update_before_play", 1)))
-        
+
         self.log_message("配置已加载")
 
     def save_current_config(self):
@@ -756,46 +762,6 @@ class ServerUI(QMainWindow):
             self.server_running = False
             self.start_btn.setText("启动服务")
             self.status_label.setText("服务器状态: 错误")
-
-    def setup_announcement_monitor(self):
-        """设置公告文件监控"""
-        self.announcement_timer = QTimer()
-        self.announcement_timer.timeout.connect(self.check_announcements)
-        self.announcement_timer.start(5000)  # 每5秒检查一次
-        self.last_modified_time = self.get_announcement_modified_time()
-        
-    def get_announcement_modified_time(self):
-        """获取公告文件修改时间"""
-        try:
-            return os.path.getmtime('G.txt')
-        except:
-            return 0
-            
-    def check_announcements(self):
-        """检查公告文件是否更新"""
-        current_time = self.get_announcement_modified_time()
-        if current_time > self.last_modified_time:
-            self.last_modified_time = current_time
-            self.load_announcements()
-            
-    def load_announcements(self):
-        """加载公告内容到配置"""
-        try:
-            with open('G.txt', 'r', encoding='utf-8') as f:
-                # 读取所有行并过滤空行
-                lines = [line.strip() for line in f.readlines() if line.strip()]
-                # 使用 |n 连接所有行
-                notice = " |n".join(f"{i+1}. {line}" for i, line in enumerate(lines))
-                # 更配置
-                CONFIG["serverinfo"]["server_notice"] = notice
-                # 同时更新据库中的公告
-                db.announcements = lines  # 更新这里
-                self.log_message("公告已更:")
-                self.log_message(notice)
-        except Exception as e:
-            self.log_message(f"读取公告文件失败: {e}")
-            CONFIG["serverinfo"]["server_notice"] = "暂无公告"
-            db.announcements = ["暂无公告"]  # 更新这里
 
     def parse_soap_response(self, xml_string):
         """解析SOAP响应，提取result内容或错误信息"""
@@ -973,14 +939,27 @@ class ServerUI(QMainWindow):
         """加载MPQ白名单"""
         whitelist = set()
         try:
+            # 从白名单文件加载
             with open('MpqWhiteList.txt', 'r', encoding='utf-8') as f:
                 for line in f:
                     line = line.strip()
                     if line:
                         whitelist.add(line.lower())
             self.log_message(f"已加载MPQ白名单: {len(whitelist)}个文件")
+
+            # 添加服务器Data目录下的MPQ文件到白名单
+            download_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Download")
+            server_data_path = os.path.join(download_path, "Data")
+            if os.path.exists(server_data_path):
+                for file in os.listdir(server_data_path):
+                    if file.lower().endswith('.mpq'):
+                        whitelist.add(file.lower())
+                        print(f"添加服务器MPQ到白名单: {file.lower()}")                    
+            print(f"最终的MPQ白名单: {whitelist}")
+
         except Exception as e:
             self.log_message(f"加载MPQ白名单失败: {str(e)}")
+            
         return whitelist
 
     def on_save_clicked(self):
@@ -1045,17 +1024,7 @@ async def check_update():
         files_info = {}
         
         # 使用全局白名单
-        mpq_whitelist = GLOBAL_MPQ_WHITELIST.copy()
-        
-        # 只需要添加服务器Data录下的MPQ文件到白名单
-        server_data_path = os.path.join(download_path, "Data")
-        if os.path.exists(server_data_path):
-            for file in os.listdir(server_data_path):
-                if file.lower().endswith('.mpq'):
-                    mpq_whitelist.add(file.lower())
-                    print(f"添加服务器MPQ到白名单: {file.lower()}")
-                    
-        print(f"最终的MPQ白名单: {mpq_whitelist}")
+        mpq_whitelist = GLOBAL_MPQ_WHITELIST.copy()  
 
         # 扫描Download目录
         for root, _, files in os.walk(download_path):
@@ -1078,7 +1047,7 @@ async def check_update():
                             'is_data_file': False
                         }
                 elif relative_path.startswith('Data/'):
-                    # Data目录下的文件始终添加
+                    # Data目录下的文件始终添���
                     file_lower = file.lower()
                     is_mpq = file_lower.endswith('.mpq')
                     in_whitelist = file_lower in mpq_whitelist if is_mpq else False
@@ -1107,31 +1076,20 @@ async def check_update():
                         'is_data_file': False
                     }
 
-        # 确保使用整数值并明确指定
-        force_wow = 1 if int(CONFIG.get("force_wow", 0)) == 1 else 0
-        force_mpq = 1 if int(CONFIG.get("force_mpq", 0)) == 1 else 0
+
 
         # 构建响应数据，添加更多信息
         response_data = {
             "files": files_info,
-            "config": {
-                "force_wow": force_wow,
-                "force_mpq": force_mpq,
-                "check_update_before_play": int(CONFIG.get("check_update_before_play", 1))  # 添加新配置
-            },
-            "mpq_whitelist": list(mpq_whitelist)
-        }       
-
-        
+            "mpq_whitelist": list(mpq_whitelist)    
+        }
+                
         # 使用 JSONResponse 时指定媒体类型和编码，并添加额外的响应头
         return JSONResponse(
             content=response_data,
             media_type="application/json",
             headers={
                 "Content-Type": "application/json; charset=utf-8",
-                "X-Force-Wow": str(force_wow),
-                "X-Force-Mpq": str(force_mpq),
-                "X-Check-Update": str(CONFIG.get("check_update_before_play", 1))  # 添加新的响应头
             }
         )
         

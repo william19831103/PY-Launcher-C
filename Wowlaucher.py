@@ -22,6 +22,16 @@ class WowLauncher(QMainWindow):
         # 设置窗口标题和大小
         self.setWindowTitle("连接中...")  # 初始标题，等待从服务器获取
         self.setFixedSize(1228, 921)
+
+        # 初始化全局变量
+        self.wow_ip = "127.0.0.1"
+        self.wow_port = "3724" 
+        self.login_title = "XX魔兽"
+        self.online_count = 0
+        self.force_wow = 0
+        self.force_mpq = 0
+        self.check_update_before_play = 1
+        self.announcements = ["暂无公告"]
         
         # 创建事件循环
         self.loop = asyncio.new_event_loop()
@@ -47,17 +57,30 @@ class WowLauncher(QMainWindow):
         self.timer.timeout.connect(self.update_server_status)
         self.timer.start(60000)  # 每60秒更新一次
 
+
     async def initial_update(self):
         """启动时的初始更新"""
         try:
-            # 先获取服务器状态
+            # 先获取服务器信息，因为这包含了check_update_before_play的值
+            server_info = await self.get_server_info()
+            if server_info:
+                # 更新标题
+                title = server_info.get("login_title", "无限魔兽")
+                self.setWindowTitle(title)
+                self.title_label.setText(title)
+                
+                # 确保check_update_before_play被正确设置
+                self.check_update_before_play = int(server_info.get("check_update_before_play", 1))
+                print(f"初始化时获取到启动前检查更新设置: {self.check_update_before_play}")
+            
+            # 再获取服务器状态
             response = await self.send_request(Opcodes.SERVER_STATUS)
             if response:
                 # 更新状态和在线人数
-                server_status = response.get('status', '未知')  # 获取服务器返回的状态
+                server_status = response.get('status', '未知')
                 online_count = response.get('online_count', 0)
                 
-                status = f"服务器状态: {server_status}\n"  # 使用服务器返回的状态
+                status = f"服务器状态: {server_status}\n"
                 status += f"在线人数: {online_count}\n\n"
                 status += "公告：\n"
                 
@@ -68,14 +91,6 @@ class WowLauncher(QMainWindow):
                     
                 # 立即更新显示
                 self.info_box.setText(status)
-                
-            # 再获取服务器信息
-            server_info = await self.get_server_info()
-            if server_info:
-                # 更新标题
-                title = server_info.get("login_title", "无限魔兽")
-                self.setWindowTitle(title)
-                self.title_label.setText(title)
                 
         except Exception as e:
             print(f"初始化更新失败: {str(e)}")
@@ -210,7 +225,7 @@ class WowLauncher(QMainWindow):
         """)
         self.progress.hide()
         
-        # 开始游戏按钮
+        # 开始游戏按
         self.start_btn = QPushButton("开始游戏", self)
         self.start_btn.setGeometry(494, 810, 240, 70)
         self.start_btn.setStyleSheet("""
@@ -298,12 +313,14 @@ class WowLauncher(QMainWindow):
         """更新服务器状态"""
         try:
             self.loop.run_until_complete(self._async_update_server_status())
+            # 同时更新服务器信息
+            self.loop.run_until_complete(self.get_server_info())
         except Exception as e:
             print(f"更新服务器状态失败: {str(e)}")
             self.info_box.setText("无法获取服务器状态")
 
     async def _async_update_server_status(self):
-        """异步更新服务器状态"""
+        """异��更新服务器状态"""
         try:
             response = await self.send_request(Opcodes.SERVER_STATUS)
             if response:
@@ -342,7 +359,7 @@ class WowLauncher(QMainWindow):
                         
     def open_change_pwd(self):
         dialog = ChangePasswordDialog(self)
-        # 将对话框移动到主窗口中心
+        # 将对话框移动到主窗口中���
         dialog.move(self.geometry().center() - dialog.rect().center())
         dialog.exec_()
     
@@ -389,6 +406,7 @@ class WowLauncher(QMainWindow):
     async def check_update(self):
         """检查更新"""
         try:
+            # 显示进度条
             self.progress.show()
             self.progress.setValue(0)
             self.update_btn.setEnabled(False)
@@ -404,23 +422,14 @@ class WowLauncher(QMainWindow):
                 async with session.get("http://localhost:8080/check_update") as response:
                     if response.status == 200:
                         data = await response.json()
-                        server_files = data["files"]
-                        
-                        # 从新的配置结构中读取值
-                        config = data.get("config", {})
-                        force_wow = int(config.get("force_wow", 0))
-                        force_mpq = int(config.get("force_mpq", 0))
-                        
-                        # 打印接收到的配置值用于调试
-                        print(f"接收到的配置: {json.dumps(config, indent=2)}")
-                        print(f"force_wow: {force_wow}")
-                        print(f"force_mpq: {force_mpq}")
+                        server_files = data["files"] 
                         
                         mpq_whitelist = set(data.get("mpq_whitelist", []))
                         
                         self.log_message(f"获到服务器文件列表: {len(server_files)}个文件")
-                        self.log_message(f"强制更新WOW.EXE: {'是' if force_wow == 1 else '否'}")
-                        self.log_message(f"强制删除无关MPQ: {'是' if force_mpq == 1 else '否'}")
+                        self.log_message(f"强制更新WOW.EXE: {'是' if self.force_wow == 1 else '否'}")
+                        self.log_message(f"强制删除无关MPQ: {'是' if self.force_mpq == 1 else '否'}")
+                        self.log_message(f"启动前检查更新: {'是' if self.check_update_before_play == 1 else '否'}")
                     else:
                         raise Exception("获取服务器文件列表失败")
 
@@ -434,7 +443,7 @@ class WowLauncher(QMainWindow):
                 
                 # 处理Wow目录下的文件
                 if file_path.startswith("Wow/"):
-                    if force_wow == 1:
+                    if self.force_wow == 1:
                         # 强制更新Wow目录的所有文件
                         target_path = os.path.join(client_root, file_path.replace("Wow/", ""))
                         self.log_message(f"添加Wow目录文件到更新列表: {file_path}")
@@ -444,7 +453,7 @@ class WowLauncher(QMainWindow):
 
                 # 处理Data目录下的文件
                 if file_path.startswith("Data/"):
-                    if force_mpq == 1:
+                    if self.force_mpq == 1:
                         # 检查是否在白名单中
                         file_name = os.path.basename(file_path).lower()
                         if file_name in mpq_whitelist:
@@ -525,7 +534,7 @@ class WowLauncher(QMainWindow):
             self.start_btn.setEnabled(True)
             QMessageBox.warning(self, "错误", f"更新失败: {str(e)}")
 
-        if force_mpq == 1:
+        if self.force_mpq == 1:
             self.log_message("检查无关MPQ文件...")
             data_dir = os.path.join(client_root, "Data")
             if os.path.exists(data_dir):
@@ -558,6 +567,34 @@ class WowLauncher(QMainWindow):
             return None
 
     def start_game(self):
+        """开始游戏"""
+        try:
+            # 添加调试日志
+            print(f"开始游戏时的check_update_before_play值: {self.check_update_before_play}")
+            
+            if int(self.check_update_before_play) == 1:  # 确保进行整数比较
+                print("启动前检查更新已开启,开始检查更新...")
+                # 创建事件循环
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                try:
+                    # 运行检查更新
+                    loop.run_until_complete(self.check_update())
+                    # 检查更新完成后再启动游戏
+                    self._launch_game()
+                finally:
+                    loop.close()
+            else:
+                print("启动前检查更新已关闭,直接启动游戏...")
+                self._launch_game()
+                
+        except Exception as e:
+            print(f"启动游戏时发生错误: {str(e)}")  # 添加错误日志
+            QMessageBox.warning(self, "错误", f"启动游戏失败: {str(e)}")
+
+    def _launch_game(self):
+        """实际启动游戏的方法"""
         wow_path = "C:\\Program Files\\World of Warcraft\\Wow.exe"
         if os.path.exists(wow_path):
             subprocess.Popen(wow_path)
@@ -584,25 +621,35 @@ class WowLauncher(QMainWindow):
         """更新服务器信息到UI"""
         try:
             # 设置窗口标题和标签标题
-            title = server_info.get("login_title", "无限魔兽")
-            self.setWindowTitle(title)
-            self.title_label.setText(title)
+            self.login_title = server_info.get("login_title", "XX魔兽") 
+            self.setWindowTitle(self.login_title)
+            self.title_label.setText(self.login_title)
             
             # 更新状态和在线人数
-            server_status = server_info.get('status', '未知')  # 从服务器信息中获取状态
-            online_count = server_info.get('online_count', 0)
+            server_status = server_info.get('status', '未知')
+            self.online_count = server_info.get("online_count", 0)
             
             status = f"服务器状态: {server_status}\n"
-            status += f"在线人数: {online_count}\n\n"
-            status += "公告：\n"
-            
-            # 新公告
-            announcements = server_info.get("announcements", ["暂无公告"])
-            for announcement in announcements:
-                status += f"{announcement}\n"
-                
+            status += f"在线人数: {self.online_count}\n\n"
+
+            # 公告
+            self.announcements = server_info.get("announcements", ["暂无公告"])
+            for announcement in self.announcements:
+                status += f"{announcement}\n"                
             # 立即更新显示
             self.info_box.setText(status)
+
+            # 更新全局变量
+            self.wow_ip = server_info.get("wow_ip", "127.0.0.1")
+            self.wow_port = server_info.get("wow_port", "3724")
+
+            # 强制更新
+            self.force_wow = server_info.get("force_wow", 0)
+            self.force_mpq = server_info.get("force_mpq", 0)           
+            self.check_update_before_play = (server_info.get("check_update_before_play", 0))
+
+            print(f"获取到启动前检查更新设置: {self.check_update_before_play}")  # 添加调试日志
+            
         except Exception as e:
             print(f"更新服务器信息失败: {str(e)}")
 
