@@ -446,49 +446,58 @@ class ServerUI(QMainWindow):
         self.soap_pass.setFixedWidth(100)
         config_layout.addWidget(self.soap_pass, 3, 3)
 
-        # 更新根目录WOW.EXE
+        # 强制更新WOW.EXE
         config_layout.addWidget(QLabel("更新根目录WOW.EXE等(0/1):"), 4, 0)
         self.force_wow = QLineEdit()
         self.force_wow.setFixedWidth(100)
         config_layout.addWidget(self.force_wow, 4, 1)
 
+        # 强制删除无关MPQ
         config_layout.addWidget(QLabel("强制删除无关MPQ(0/1):"), 4, 2)
         self.force_mpq = QLineEdit()
         self.force_mpq.setFixedWidth(100)
         config_layout.addWidget(self.force_mpq, 4, 3)
 
-        # 在服务器配置区域加数据库配置
-        config_layout.addWidget(QLabel("MySQL配置"), 5, 0, 1, 4)  # 添加标题
-        
+        # 启动前检查更新 - 移动到这里
+        config_layout.addWidget(QLabel("启动前检查更新(0/1):"), 5, 0)
+        self.check_update = QLineEdit()
+        self.check_update.setFixedWidth(100)
+        config_layout.addWidget(self.check_update, 5, 1)
+
+        # MySQL配置标题
+        config_layout.addWidget(QLabel("MySQL配置"), 6, 0, 1, 4)
+
         # MySQL主机
-        config_layout.addWidget(QLabel("MySQL主机:"), 6, 0)
+        config_layout.addWidget(QLabel("MySQL主机:"), 7, 0)
         self.mysql_host = QLineEdit()
         self.mysql_host.setFixedWidth(100)
-        config_layout.addWidget(self.mysql_host, 6, 1)
+        config_layout.addWidget(self.mysql_host, 7, 1)
 
         # MySQL端口
-        config_layout.addWidget(QLabel("MySQL端口:"), 6, 2)
+        config_layout.addWidget(QLabel("MySQL端口:"), 7, 2)
         self.mysql_port = QLineEdit()
         self.mysql_port.setFixedWidth(100)
-        config_layout.addWidget(self.mysql_port, 6, 3)
+        config_layout.addWidget(self.mysql_port, 7, 3)
 
         # MySQL用户名
-        config_layout.addWidget(QLabel("MySQL用户名:"), 7, 0)
+        config_layout.addWidget(QLabel("MySQL用户名:"), 8, 0)
         self.mysql_user = QLineEdit()
         self.mysql_user.setFixedWidth(100)
-        config_layout.addWidget(self.mysql_user, 7, 1)
+        config_layout.addWidget(self.mysql_user, 8, 1)
 
         # MySQL密码
-        config_layout.addWidget(QLabel("MySQL密码:"), 7, 2)
+        config_layout.addWidget(QLabel("MySQL密码:"), 8, 2)
         self.mysql_pass = QLineEdit()
         self.mysql_pass.setFixedWidth(100)
-        config_layout.addWidget(self.mysql_pass, 7, 3)
+        config_layout.addWidget(self.mysql_pass, 8, 3)
 
         # MySQL数据库名
-        config_layout.addWidget(QLabel("数据库名:"), 8, 0)
+        config_layout.addWidget(QLabel("数据库名:"), 9, 0)
         self.mysql_database = QLineEdit()
         self.mysql_database.setFixedWidth(100)
-        config_layout.addWidget(self.mysql_database, 8, 1)
+        config_layout.addWidget(self.mysql_database, 9, 1)
+
+
 
         config_group.setLayout(config_layout)
         layout.addWidget(config_group)
@@ -644,6 +653,7 @@ class ServerUI(QMainWindow):
         self.soap_pass.setDisabled(disabled)
         self.force_wow.setDisabled(disabled)
         self.force_mpq.setDisabled(disabled)
+        self.check_update.setDisabled(disabled)
 
     def load_saved_config(self):
         """加载保存的配置"""
@@ -667,6 +677,9 @@ class ServerUI(QMainWindow):
         self.mysql_user.setText(config.get("mysql_user", "root"))
         self.mysql_pass.setText(config.get("mysql_password", "root"))
         self.mysql_database.setText(config.get("mysql_database", "realmd"))
+        
+        # 添加新配置的加载
+        self.check_update.setText(str(config.get("check_update_before_play", 1)))
         
         self.log_message("配置已加载")
 
@@ -701,32 +714,28 @@ class ServerUI(QMainWindow):
                 "mysql_user": self.mysql_user.text(),
                 "mysql_password": self.mysql_pass.text(),
                 "mysql_database": self.mysql_database.text(),
+                
+                "check_update_before_play": int(self.check_update.text())
             }
             
             # 打印要保存的配置
             self.log_message(f"要保存的配置:")
             self.log_message(f"force_wow: {config['force_wow']}")
             self.log_message(f"force_mpq: {config['force_mpq']}")
+            self.log_message(f"check_update_before_play: {config['check_update_before_play']}")
 
             if save_config(config):
-                # 更新全局置
+                # 更新全局配置
                 CONFIG.clear()
                 CONFIG.update(config)
                 
-                # 更新数据库连接配置
-                global DB_CONFIG
-                DB_CONFIG.update({
-                    'host': config['mysql_host'],
-                    'port': config['mysql_port'],
-                    'user': config['mysql_user'],
-                    'password': config['mysql_password'],
-                    'database': config['mysql_database']
-                })
+                # 保存到文件
+                if save_config(config):
+                    self.log_message("配置已保存")
+                    QMessageBox.information(self, "成功", "配置已保存")
+                else:
+                    QMessageBox.warning(self, "错误", "保存配置失败")
                 
-                self.log_message("配置已保存")
-                QMessageBox.information(self, "成功", "配置已保存")
-            else:
-                QMessageBox.warning(self, "错误", "保存配置失败")
         except Exception as e:
             self.log_message(f"保存配置时发生错误: {str(e)}")
             QMessageBox.warning(self, "错误", f"保存配置失败: {str(e)}")
@@ -1059,7 +1068,7 @@ async def check_update():
                 relative_path = os.path.relpath(full_path, download_path)
                 relative_path = relative_path.replace('\\', '/')
                 
-                # 根据不同目录和配置决定是否添加文件
+                # 根据不同目录和配置决定是否加文件
                 if relative_path.startswith('Wow/'):
                     # Wow目录下的文件只在force_wow=1时添加
                     if int(CONFIG.get("force_wow", 0)) == 1:
@@ -1112,8 +1121,7 @@ async def check_update():
             "config": {
                 "force_wow": force_wow,
                 "force_mpq": force_mpq,
-                "force_wow_enabled": bool(force_wow),  # 添加布尔值
-                "force_mpq_enabled": bool(force_mpq)   # 添加布尔值
+                "check_update_before_play": int(CONFIG.get("check_update_before_play", 1))  # 添加新配置
             },
             "mpq_whitelist": list(mpq_whitelist)
         }       
@@ -1126,7 +1134,8 @@ async def check_update():
             headers={
                 "Content-Type": "application/json; charset=utf-8",
                 "X-Force-Wow": str(force_wow),
-                "X-Force-Mpq": str(force_mpq)
+                "X-Force-Mpq": str(force_mpq),
+                "X-Check-Update": str(CONFIG.get("check_update_before_play", 1))  # 添加新的响应头
             }
         )
         
