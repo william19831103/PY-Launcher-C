@@ -498,11 +498,12 @@ class WowLauncher(QMainWindow):
                 # 处理Wow目录下的文件
                 if file_path.startswith("Wow/"):
                     if self.force_wow == 1:
-                        # 强制更新Wow目录的所有文件
+                        # 强制更新Wow目录的文件,但需要检查hash
                         target_path = os.path.join(client_root, file_path.replace("Wow/", ""))
-                        self.log_message(f"添加Wow目录文件到更新列表: {file_path}")
-                        need_update.append((file_path, target_path))
-                        total_size += info['size']
+                        if not os.path.exists(target_path) or await self.get_file_hash(Path(target_path)) != info['hash']:
+                            self.log_message(f"添加Wow目录文件到更新列表: {file_path}")
+                            need_update.append((file_path, target_path))
+                            total_size += info['size']
                     continue
 
                 # 处理Data目录下的文件
@@ -551,7 +552,7 @@ class WowLauncher(QMainWindow):
                     # 下载文件
                     async with aiohttp.ClientSession() as session:
                         encoded_path = urllib.parse.quote(server_path)
-                        url = f"http://localhost:8080/download/{encoded_path}"
+                        url = f"http://{self.api_base_url}/download/{encoded_path}"
                         self.log_message(f"下载URL: {url}")
                         
                         async with session.get(url) as response:
