@@ -405,7 +405,7 @@ class ServerUI(QMainWindow):
         self.encryption_key.setFixedWidth(130)
         config_layout.addWidget(self.encryption_key, 5, 3)
 
-        # 将加密补���和解密补丁改为按钮
+        # 将加密补和解密补丁改为按钮
         self.encryption_btn = QPushButton("加密补丁")
         self.encryption_btn.setFixedWidth(130)
         self.encryption_btn.clicked.connect(self.encrypt_patch)
@@ -584,8 +584,8 @@ class ServerUI(QMainWindow):
         self.mysql_pass.setText(config.get("mysql_password", "root"))
         self.mysql_database.setText(config.get("mysql_database", "realmd"))
 
-        # 只保留加密秘钥的加载
-        self.encryption_key.setText(config.get("encryption_key", ""))
+        # 加载加密秘钥，使用默认值 "@@112233"
+        self.encryption_key.setText(config.get("encryption_key", "@@112233"))
         
         self.log_message("配置已加载")
 
@@ -781,7 +781,7 @@ class ServerUI(QMainWindow):
                     # 提取当前在线人数
                     online_count = int(result.split("Players online:")[1].split("(")[0].strip())
                     CONFIG["online_count"] = online_count
-                    self.log_message(f"游戏服务���在线，当前在线人数: {online_count}")
+                    self.log_message(f"游戏服务在线，当前在线人数: {online_count}")
                 else:
                     CONFIG["gameserver_online"] = 0
                     CONFIG["online_count"] = 0
