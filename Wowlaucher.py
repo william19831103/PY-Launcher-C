@@ -623,9 +623,7 @@ class WowLauncher(QMainWindow):
     def start_game(self):
         """开始游戏"""
         try:
-            # 添加调试日志
-            print(f"开始游戏时的check_update_before_play值: {self.check_update_before_play}")
-            
+            # 启动前检查更新
             if int(self.check_update_before_play) == 1:  # 确保进行整数比较
                 print("启动前检查更新已开启,开始检查更新...")
                 # 创建事件循环
@@ -649,7 +647,17 @@ class WowLauncher(QMainWindow):
 
     def _launch_game(self):
         """实际启动游戏的方法"""
-        wow_path = "C:\\Program Files\\World of Warcraft\\Wow.exe"
+        wow_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Wow.exe')
+
+        #修改realmlist.wtf 判断是 wow_port是否3724,如果不是,wowip后面加端口
+        realmlist_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'realmlist.wtf')
+        with open(realmlist_path, 'w') as f:
+            if self.wow_port != "3724":
+                f.write(f"set realmlist {self.wow_ip}:{self.wow_port}\n")
+            else:
+                f.write(f"set realmlist {self.wow_ip}\n")
+
+        # 启动游戏
         if os.path.exists(wow_path):
             subprocess.Popen(wow_path)
         else:
