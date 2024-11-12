@@ -553,6 +553,11 @@ class ServerUI(QMainWindow):
                 
                 # 立即检查一次服务器状态
                 QTimer.singleShot(2000, self.check_server_status)
+
+                # 设置定时器定期检查服务器状态
+                self.status_timer = QTimer(self)
+                self.status_timer.timeout.connect(self.check_server_status)
+                self.status_timer.start(60000)  # 设置定时器间隔为60000毫秒（即60秒）
                 
             except Exception as e:
                 self.log_message(f"启动服务器时发生错误: {str(e)}")
