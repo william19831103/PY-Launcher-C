@@ -28,7 +28,8 @@ DEFAULT_CONFIG = {
     "mysql_port": 3306,
     "mysql_user": "root",
     "mysql_password": "root",
-    "mysql_database": "realmd"
+    "mysql_database": "realmd",
+    "encryption_key": "@@112233"
 }
 
 def save_config(config_data):
