@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -243,6 +244,7 @@ async def get_server_info():
             "force_wow": CONFIG.get("force_wow", 0),
             "force_mpq": CONFIG.get("force_mpq", 0),
             "check_update_before_play": (CONFIG.get("check_update_before_play", 1)),
+            "max_client_count": CONFIG.get("max_client_count", 3),
             "announcements": announcements,  
             "encryption_key": CONFIG.get("encryption_key", "@@112233")
         }
@@ -401,22 +403,17 @@ class ServerUI(QMainWindow):
         self.check_update.setFixedWidth(130)
         config_layout.addWidget(self.check_update, 5, 1)
 
+        # 最WOW多开最大数量
+        config_layout.addWidget(QLabel("WOW多开最大数量:"), 5, 2)
+        self.max_client_count = QLineEdit()
+        self.max_client_count.setFixedWidth(130)
+        config_layout.addWidget(self.max_client_count, 5, 3)
+
         # 加解密相关配置
-        config_layout.addWidget(QLabel("加解密秘钥:"), 5, 2)
+        config_layout.addWidget(QLabel("加解密秘钥:"), 6, 0)
         self.encryption_key = QLineEdit()
         self.encryption_key.setFixedWidth(130)
-        config_layout.addWidget(self.encryption_key, 5, 3)
-
-        # 将加密补和解密补丁改为按钮
-        self.encryption_btn = QPushButton("加密补丁")
-        self.encryption_btn.setFixedWidth(130)
-        self.encryption_btn.clicked.connect(self.encrypt_patch)
-        config_layout.addWidget(self.encryption_btn, 6, 0)
-
-        self.decryption_btn = QPushButton("解密补丁")
-        self.decryption_btn.setFixedWidth(130)
-        self.decryption_btn.clicked.connect(self.decrypt_patch)
-        config_layout.addWidget(self.decryption_btn, 6, 2)
+        config_layout.addWidget(self.encryption_key, 6, 1)
 
         # MySQL配置标题 (原来的行号需要相应调整)
         config_layout.addWidget(QLabel("MySQL配置"), 7, 0, 1, 4)
@@ -451,7 +448,16 @@ class ServerUI(QMainWindow):
         self.mysql_database.setFixedWidth(130)
         config_layout.addWidget(self.mysql_database, 10, 1)
 
+        # 将加密和解密补丁按钮移到这里
+        self.encryption_btn = QPushButton("加密补丁")
+        self.encryption_btn.setFixedWidth(130)
+        self.encryption_btn.clicked.connect(self.encrypt_patch)
+        config_layout.addWidget(self.encryption_btn, 11, 0)
 
+        self.decryption_btn = QPushButton("解密补丁")
+        self.decryption_btn.setFixedWidth(130)
+        self.decryption_btn.clicked.connect(self.decrypt_patch)
+        config_layout.addWidget(self.decryption_btn, 11, 2)
 
         config_group.setLayout(config_layout)
         layout.addWidget(config_group)
@@ -579,6 +585,9 @@ class ServerUI(QMainWindow):
         self.force_mpq.setText(str(config.get("force_mpq", 0)))
         self.check_update.setText(str(config.get("check_update_before_play", 1)))
         
+        # 添加最大进程数量的加载
+        self.max_client_count.setText(str(config.get("max_client_count", 3)))
+        
         # 加载MySQL配置
         self.mysql_host.setText(config.get("mysql_host", "127.0.0.1"))
         self.mysql_port.setText(str(config.get("mysql_port", 3306)))
@@ -607,6 +616,7 @@ class ServerUI(QMainWindow):
                 "force_wow": int(self.force_wow.text()),  # 确保是整数
                 "force_mpq": int(self.force_mpq.text()),  # 确保是整数
                 "check_update_before_play": int(self.check_update.text()),  # 确保是整数
+                "max_client_count": int(self.max_client_count.text()),  # 确保是整数
                 
                 "soap_ip": self.soap_ip.text(),
                 "soap_port": self.soap_port.text(),

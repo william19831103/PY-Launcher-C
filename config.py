@@ -17,6 +17,7 @@ DEFAULT_CONFIG = {
     "force_wow": 1,
     "force_mpq": 1,
     "check_update_before_play": 0,
+    "max_client_count": 3,
     "soap_ip": "127.0.0.1", 
     "soap_port": "7878",
     "soap_username": "1",
