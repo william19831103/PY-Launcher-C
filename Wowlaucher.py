@@ -71,6 +71,9 @@ class WowLauncher(QMainWindow):
         # 6. 设置UI
         self.setup_ui()
         
+        # 初始化系统托盘
+        self.setup_tray_icon()
+        
         # 7. 启动时立即获取服务器信息和状态
         self.loop.run_until_complete(self.initial_update())
         
@@ -106,7 +109,7 @@ class WowLauncher(QMainWindow):
     async def initial_update(self):
         """启动时的初始更新"""
         try:
-            # 先获取服务器信息，因��这包含了check_update_before_play的值
+            # 先获取服务器信息，因这包含了check_update_before_play的值
             server_info = await self.get_server_info()
             if server_info:
                 # 更新标题
@@ -683,12 +686,19 @@ class WowLauncher(QMainWindow):
             QMessageBox.warning(self, "错误", f"启动游戏失败: {str(e)}")
             
     def _restore_start_button(self, original_style, original_text):
-        """恢复开始游戏按钮的状态并最小化窗口"""
+        """恢复开始游戏按钮的状态并最小化到托盘"""
         self.start_btn.setEnabled(True)
         self.start_btn.setStyleSheet(original_style)
         self.start_btn.setText(original_text)
-        # 最小化窗口
-        self.showMinimized()
+        # 隐藏窗口而不是最小化
+        self.hide()
+        # 显示托盘通知
+        self.tray_icon.showMessage(
+            self.windowTitle(),
+            "游戏启动完成，登录器已最小化到系统托盘",
+            QSystemTrayIcon.Information,
+            2000
+        )
 
     def inject_dll(self, process_handle, dll_path):
         """将DLL注入到目标进程"""
@@ -1005,6 +1015,62 @@ class WowLauncher(QMainWindow):
                 pass
             
         return wow_process_count
+
+    def show_window(self):
+        """显示主窗口"""
+        self.show()
+        self.setWindowState(Qt.WindowNoState)
+        self.activateWindow()
+
+    def quit_application(self):
+        """退出应用程序"""
+        self.tray_icon.hide()
+        QApplication.quit()
+
+    def tray_icon_activated(self, reason):
+        """托盘图标被激活时的处理"""
+        if reason == QSystemTrayIcon.DoubleClick:
+            self.show_window()
+
+    def closeEvent(self, event):
+        """重写关闭事件，改为最小化到托盘"""
+        event.ignore()
+        self.hide()
+        self.tray_icon.showMessage(
+            self.windowTitle(),
+            "程序已最小化到系统托盘",
+            QSystemTrayIcon.Information,
+            2000
+        )
+
+    def setup_tray_icon(self):
+        """初始化系统托盘图标"""
+        try:
+            # 创建系统托盘图标
+            self.tray_icon = QSystemTrayIcon(self)
+            icon = QIcon("wow_icon.png")
+            self.tray_icon.setIcon(icon)
+            self.setWindowIcon(icon)  # 同时设置窗口图标
+            
+            # 创建托盘菜单
+            tray_menu = QMenu()
+            show_action = tray_menu.addAction("显示主窗口")
+            show_action.triggered.connect(self.show_window)
+            quit_action = tray_menu.addAction("退出")
+            quit_action.triggered.connect(self.quit_application)
+            
+            # 设置托盘图标的菜单
+            self.tray_icon.setContextMenu(tray_menu)
+            
+            # 托盘图标双击事件
+            self.tray_icon.activated.connect(self.tray_icon_activated)
+            
+            # 显示托盘图标
+            self.tray_icon.show()
+            
+            print("系统托盘图标初始化成功")
+        except Exception as e:
+            print(f"初始化系统托盘图标失败: {str(e)}")
 
 # 首先创建一个基类
 class BaseServiceDialog(QDialog):
