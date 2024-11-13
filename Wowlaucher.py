@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -435,12 +436,12 @@ class WowLauncher(QMainWindow):
         
         try:
             # 修改参数名为 passgamecheck
-            loop.run_until_complete(self.check_update(passgamecheck=True))
+            loop.run_until_complete(self.check_update())
         finally:
             # 关闭事件循环
             loop.close()
 
-    async def check_update(self,passgamecheck=True):
+    async def check_update(self):
         """检查更新"""
         try:
             # 显示进度条
@@ -453,24 +454,9 @@ class WowLauncher(QMainWindow):
             # 获取客户端根目录
             client_root = os.path.dirname(os.path.abspath(__file__))
             self.log_message(f"客户端目录: {client_root}")
-            # 检查wow.exe是否在运行
-            def is_wow_running():
-                # 获取当前文件所在目录的绝对路径
-                current_dir = os.path.dirname(os.path.abspath(__file__))  
-                # 构建当前目录下的 Wow.exe 路径
-                wow_exe_path = os.path.join(current_dir, 'Wow.exe')  
-
-                # 获取进程的执行路径和PID
-                for proc in psutil.process_iter(['pid', 'exe']):  
-                    try:
-                        if proc.info['exe'] and os.path.abspath(proc.info['exe']).lower() == wow_exe_path.lower():
-                            return True
-                    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                        pass
-                return False
             
             # 如果游戏正在运行，并且是检查更新，则提示用户关闭游戏
-            if is_wow_running() and passgamecheck:
+            if self.is_wow_running() > 0:
                 self.log_message("检测到游戏正在运行")
                 self.progress.hide()
                 self.update_btn.setEnabled(True)
@@ -632,26 +618,41 @@ class WowLauncher(QMainWindow):
     def start_game(self):
         """开始游戏"""
         try:
-            # 启动前检查更新
-            if int(self.check_update_before_play) == 1:  # 确保进行整数比较
-                print("启动前检查更新已开启,开始检查更新...")
+            # 首先检查游戏进程数量
+            wow_process_count = self.is_wow_running()
+            
+            # 1. 如果进程数量超过限制,直接返回
+            if wow_process_count >= self.max_client_count:
+                QMessageBox.warning(self, "错误", f"已达到最大游戏客户端数量限制({self.max_client_count}个)")
+                return
+            
+            # 2. 如果有进程在运行但未达到限制,直接启动新进程
+            if wow_process_count > 0:
+                print(f"当前运行的游戏进程数: {wow_process_count}, 继续启动新进程...")
+                self._launch_game()
+                return
+            
+            # 3. 如果没有进程在运行,且需要检查更新
+            if wow_process_count == 0 and int(self.check_update_before_play) == 1:
+                print("无游戏进程运行,且启动前检查更新已开启,开始检查更新...")
                 # 创建事件循环
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 
                 try:
                     # 运行检查更新
-                    loop.run_until_complete(self.check_update(passgamecheck=False))
+                    loop.run_until_complete(self.check_update())
                     # 检查更新完成后再启动游戏
                     self._launch_game()
                 finally:
                     loop.close()
             else:
-                print("启动前检查更新已关闭,直接启动游戏...")
+                # 4. 无进程运行,且不需要检查更新,直接启动
+                print("无游戏进程运行,且启动前检查更新已关闭,直接启动游戏...")
                 self._launch_game()
                 
         except Exception as e:
-            print(f"启动游戏时发生错误: {str(e)}")  # 添加错误日志
+            print(f"启动游戏时发生错误: {str(e)}")
             QMessageBox.warning(self, "错误", f"启动游戏失败: {str(e)}")
 
     def inject_dll(self, process_handle, dll_path):
@@ -845,6 +846,7 @@ class WowLauncher(QMainWindow):
             self.force_mpq = server_info.get("force_mpq", 0)           
             self.check_update_before_play = (server_info.get("check_update_before_play", 0))
             self.encryption_key = server_info.get("encryption_key", "@@112233")
+            self.max_client_count = server_info.get("max_client_count", 3)
             print(f"获取到启动前检查更新设置: {self.check_update_before_play}")  # 添加调试日志
             
         except Exception as e:
@@ -942,6 +944,26 @@ class WowLauncher(QMainWindow):
                 "success": False,
                 "detail": str(e)
             }
+
+    def is_wow_running(self):
+        """检查WoW进程是否在运行，并返回运行的进程数量"""
+        # 获取当前文件所在目录的绝对路径
+        current_dir = os.path.dirname(os.path.abspath(__file__))  
+        # 构建当前目录下的 Wow.exe 路径
+        wow_exe_path = os.path.join(current_dir, 'Wow.exe')  
+        
+        # 计数运行的WoW进程数量
+        wow_process_count = 0
+        
+        # 获取进程的执行路径和PID
+        for proc in psutil.process_iter(['pid', 'exe']):  
+            try:
+                if proc.info['exe'] and os.path.abspath(proc.info['exe']).lower() == wow_exe_path.lower():
+                    wow_process_count += 1
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
+            
+        return wow_process_count
 
 # 首先创建一个基类
 class BaseServiceDialog(QDialog):
