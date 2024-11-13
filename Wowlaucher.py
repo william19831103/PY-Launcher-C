@@ -273,9 +273,11 @@ class WowLauncher(QMainWindow):
         """)
         self.progress.hide()
         
-        # 开始游戏按
+        # 开始游戏按钮
         self.start_btn = QPushButton("开始游戏", self)
-        self.start_btn.setGeometry(494, 810, 240, 70)
+        # 计算居中位置: (窗口宽度 - 按钮宽度) / 2
+        x = (1228 - 450) // 2  # 1228是窗口宽度,450是按钮宽度
+        self.start_btn.setGeometry(x, 810, 450, 70)
         self.start_btn.setStyleSheet("""
             QPushButton {
                 background-color: rgba(46, 204, 113, 0.8);
@@ -633,7 +635,7 @@ class WowLauncher(QMainWindow):
             original_style = self.start_btn.styleSheet()
             original_text = self.start_btn.text()
             self.start_btn.setEnabled(False)
-            self.start_btn.setText("游戏启动中")
+            self.start_btn.setText("启动中...双击右下角托盘图标恢复登录器")
             self.start_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #808080;  /* 灰色背景 */
@@ -641,7 +643,7 @@ class WowLauncher(QMainWindow):
                     border: none;
                     border-radius: 5px;
                     font-size: 24px;
-                    font-weight: bold;
+                    font-weight: bold;  
                 }
             """)
             
