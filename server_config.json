@@ -2,7 +2,7 @@
     "server_host": "0.0.0.0",
     "server_port": 8080,
     "server_debug": true,
-    "wow_ip": "127.0.0.1",
+    "wow_ip": "121.36.255.29",
     "wow_port": "3724",
     "server_title": "无限魔兽",
     "gameserver_online": 0,
@@ -21,5 +21,6 @@
     "mysql_port": 3306,
     "mysql_user": "root",
     "mysql_password": "root",
-    "mysql_database": "realmd"
+    "mysql_database": "realmd",
+    "encryption_key": "@@112233"
 }

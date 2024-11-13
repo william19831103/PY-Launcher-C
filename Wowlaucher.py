@@ -37,7 +37,7 @@ class WowLauncher(QMainWindow):
         self.force_mpq = 0
         self.check_update_before_play = 1
         self.announcements = ["暂无公告"]
-        
+        self.encryption_key = "@@112233"
         # 4. 创建事件循环
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
@@ -659,6 +659,7 @@ class WowLauncher(QMainWindow):
                 f.write(f"set realmlist {self.wow_ip}\n")
 
         # 启动游戏
+
         if os.path.exists(wow_path):
             subprocess.Popen(wow_path)
         else:
@@ -711,7 +712,7 @@ class WowLauncher(QMainWindow):
             self.force_wow = server_info.get("force_wow", 0)
             self.force_mpq = server_info.get("force_mpq", 0)           
             self.check_update_before_play = (server_info.get("check_update_before_play", 0))
-
+            self.encryption_key = server_info.get("encryption_key", "@@112233")
             print(f"获取到启动前检查更新设置: {self.check_update_before_play}")  # 添加调试日志
             
         except Exception as e:

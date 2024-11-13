@@ -244,6 +244,7 @@ async def get_server_info():
             "force_mpq": CONFIG.get("force_mpq", 0),
             "check_update_before_play": (CONFIG.get("check_update_before_play", 1)),
             "announcements": announcements,  
+            "encryption_key": CONFIG.get("encryption_key", "@@112233")
         }
         return JSONResponse(content=server_info)
         
