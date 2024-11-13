@@ -554,7 +554,7 @@ class WowLauncher(QMainWindow):
                     # 下载文件
                     async with aiohttp.ClientSession() as session:
                         encoded_path = urllib.parse.quote(server_path)
-                        url = f"http://{self.api_base_url}/download/{encoded_path}"
+                        url = f"{self.api_base_url}/download/{encoded_path}"
                         self.log_message(f"下载URL: {url}")
                         
                         async with session.get(url) as response:
