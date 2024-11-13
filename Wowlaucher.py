@@ -715,8 +715,8 @@ class WowLauncher(QMainWindow):
             if not thread_h:
                 raise Exception(f"CreateRemoteThread failed with error code: {kernel32.GetLastError()}")
             
-            # 等待注入完成
-            result = win32event.WaitForSingleObject(thread_h, 1000)  # 等待1秒
+            # 等待注入完成 - 将1000毫秒改为200毫秒
+            result = win32event.WaitForSingleObject(thread_h, 100)  # 等待200毫秒
             if result != win32event.WAIT_OBJECT_0:
                 raise Exception(f"WaitForSingleObject failed with result: {result}")
             
