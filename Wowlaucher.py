@@ -106,7 +106,7 @@ class WowLauncher(QMainWindow):
     async def initial_update(self):
         """启动时的初始更新"""
         try:
-            # 先获取服务器信息，因为这包含了check_update_before_play的值
+            # 先获取服务器信息，因��这包含了check_update_before_play的值
             server_info = await self.get_server_info()
             if server_info:
                 # 更新标题
@@ -683,10 +683,12 @@ class WowLauncher(QMainWindow):
             QMessageBox.warning(self, "错误", f"启动游戏失败: {str(e)}")
             
     def _restore_start_button(self, original_style, original_text):
-        """恢复开始游戏按钮的状态"""
+        """恢复开始游戏按钮的状态并最小化窗口"""
         self.start_btn.setEnabled(True)
         self.start_btn.setStyleSheet(original_style)
         self.start_btn.setText(original_text)
+        # 最小化窗口
+        self.showMinimized()
 
     def inject_dll(self, process_handle, dll_path):
         """将DLL注入到目标进程"""
