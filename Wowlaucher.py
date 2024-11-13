@@ -107,7 +107,7 @@ class WowLauncher(QMainWindow):
                 
                 # 确保check_update_before_play被正确设置
                 self.check_update_before_play = int(server_info.get("check_update_before_play", 1))
-                print(f"初始化时获取到启动前检查更新设置: {self.check_update_before_play}")
+                #print(f"初始化时获取到启动前检查更新设置: {self.check_update_before_play}")
             
             # 再获取服务器状态
             response = await self.send_request(Opcodes.SERVER_STATUS)
@@ -434,13 +434,13 @@ class WowLauncher(QMainWindow):
         asyncio.set_event_loop(loop)
         
         try:
-            # 运行异步任务
-            loop.run_until_complete(self.check_update())
+            # 修改参数名为 passgamecheck
+            loop.run_until_complete(self.check_update(passgamecheck=True))
         finally:
             # 关闭事件循环
             loop.close()
 
-    async def check_update(self):
+    async def check_update(self,passgamecheck=True):
         """检查更新"""
         try:
             # 显示进度条
@@ -448,7 +448,7 @@ class WowLauncher(QMainWindow):
             self.progress.setValue(0)
             self.update_btn.setEnabled(False)
             self.start_btn.setEnabled(False)
-            self.log_message("开始检查更新...")
+            #self.log_message("开始检查更新...")
 
             # 获取客户端根目录
             client_root = os.path.dirname(os.path.abspath(__file__))
@@ -468,8 +468,9 @@ class WowLauncher(QMainWindow):
                     except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                         pass
                 return False
-                
-            if is_wow_running():
+            
+            # 如果游戏正在运行，并且是检查更新，则提示用户关闭游戏
+            if is_wow_running() and passgamecheck:
                 self.log_message("检测到游戏正在运行")
                 self.progress.hide()
                 self.update_btn.setEnabled(True)
@@ -640,7 +641,7 @@ class WowLauncher(QMainWindow):
                 
                 try:
                     # 运行检查更新
-                    loop.run_until_complete(self.check_update())
+                    loop.run_until_complete(self.check_update(passgamecheck=False))
                     # 检查更新完成后再启动游戏
                     self._launch_game()
                 finally:
@@ -1157,9 +1158,9 @@ class RegisterDialog(BaseServiceDialog):
         self.account_input = self._create_input("账号名称", "4-12位数字和字母")
         self.password_input = self._create_input("输入密码", "4-12位数字和字母")
         self.confirm_pwd_input = self._create_input("确认密码", "两次输入的密码")
-        self.security_pwd_input = self._create_input("安全密码", "1-8位数字和字��")
+        self.security_pwd_input = self._create_input("安全密码", "1-8位数字和字")
         
-        # ���置验证器
+        # 置验证器
         for input_field in [self.account_input, self.password_input, 
                           self.confirm_pwd_input, self.security_pwd_input]:
             input_field.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
