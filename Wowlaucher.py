@@ -16,6 +16,13 @@ import hashlib
 from pathlib import Path
 import urllib.parse
 import psutil
+from ctypes import *
+from ctypes.wintypes import *
+import win32process
+import win32event
+import win32con
+import win32api
+import win32security
 
 class WowLauncher(QMainWindow):
     def __init__(self):
@@ -480,9 +487,9 @@ class WowLauncher(QMainWindow):
                         
                         mpq_whitelist = set(data.get("mpq_whitelist", []))
                         
-                        self.log_message(f"获到服务器文件列表: {len(server_files)}个文件")
-                        self.log_message(f"强制更新WOW.EXE: {'是' if self.force_wow == 1 else '否'}")
-                        self.log_message(f"强制删除无关MPQ: {'是' if self.force_mpq == 1 else '否'}")
+                        #self.log_message(f"获到服务器文件列表: {len(server_files)}个文件")
+                        #self.log_message(f"强制更新WOW.EXE: {'是' if self.force_wow == 1 else '否'}")
+                        #self.log_message(f"强制删除无关MPQ: {'是' if self.force_mpq == 1 else '否'}")
                         self.log_message(f"启动前检查更新: {'是' if self.check_update_before_play == 1 else '否'}")
                     else:
                         raise Exception("获取服务器文件列表失败")
@@ -536,7 +543,7 @@ class WowLauncher(QMainWindow):
                 self.update_btn.setEnabled(True)
                 self.start_btn.setEnabled(True)
                 self.log_message("客户端已是最新版本")
-                QMessageBox.information(self, "更新", "客户端已是最新版本")
+                #QMessageBox.information(self, "更新", "客户端已是最新版本")
                 return
 
             # 开始下载需要更新的文件
@@ -646,24 +653,148 @@ class WowLauncher(QMainWindow):
             print(f"启动游戏时发生错误: {str(e)}")  # 添加错误日志
             QMessageBox.warning(self, "错误", f"启动游戏失败: {str(e)}")
 
+    def inject_dll(self, process_handle, dll_path):
+        """将DLL注入到目标进程"""
+        try:
+            kernel32 = WinDLL('kernel32', use_last_error=True)
+            
+            # 计算DLL路径字符串长度
+            dll_path_size = len(dll_path) + 1
+            
+            # 在目标进程中分配内存
+            dll_path_addr = kernel32.VirtualAllocEx(
+                process_handle.handle,
+                None,
+                dll_path_size,
+                win32con.MEM_COMMIT | win32con.MEM_RESERVE,
+                win32con.PAGE_READWRITE
+            )
+            
+            if not dll_path_addr:
+                raise Exception(f"VirtualAllocEx failed with error code: {kernel32.GetLastError()}")
+            
+            # 写入DLL路径到目标进程
+            written = c_ulong(0)
+            if not kernel32.WriteProcessMemory(
+                process_handle.handle,
+                dll_path_addr,
+                dll_path.encode('ascii'),
+                dll_path_size,
+                byref(written)
+            ):
+                raise Exception(f"WriteProcessMemory failed with error code: {kernel32.GetLastError()}")
+            
+            # 获取LoadLibraryA地址
+            kernel32_handle = win32api.GetModuleHandle("kernel32.dll")
+            load_library_addr = win32api.GetProcAddress(kernel32_handle, "LoadLibraryA")
+            
+            # 创建远程线程
+            LPTHREAD_START_ROUTINE = WINFUNCTYPE(DWORD, LPVOID)
+            routine = LPTHREAD_START_ROUTINE(load_library_addr)
+            
+            thread_h = kernel32.CreateRemoteThread(
+                process_handle.handle,
+                None,
+                0,
+                routine,
+                dll_path_addr,
+                0,
+                None
+            )
+            
+            if not thread_h:
+                raise Exception(f"CreateRemoteThread failed with error code: {kernel32.GetLastError()}")
+            
+            # 等待注入完成
+            result = win32event.WaitForSingleObject(thread_h, 1000)  # 等待1秒
+            if result != win32event.WAIT_OBJECT_0:
+                raise Exception(f"WaitForSingleObject failed with result: {result}")
+            
+            # 清理资源
+            kernel32.VirtualFreeEx(process_handle.handle, dll_path_addr, 0, win32con.MEM_RELEASE)
+            win32api.CloseHandle(thread_h)
+            
+            return True
+            
+        except Exception as e:
+            print(f"DLL注入失败: {str(e)}")
+            return False
+
     def _launch_game(self):
         """实际启动游戏的方法"""
-        wow_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Wow.exe')
+        # 获取当前目录
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        wow_path = os.path.join(current_dir, 'Wow.exe')
+        dll_path = os.path.join(current_dir, 'DllReadFile.dll')
 
-        #修改realmlist.wtf 判断是 wow_port是否3724,如果不是,wowip后面加端口
-        realmlist_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'realmlist.wtf')
+        # 检查文件是否存在
+        if not os.path.exists(wow_path):
+            QMessageBox.warning(self, "错误", "未找到游戏客户端，请确认安装路径正确")
+            return
+            
+        if not os.path.exists(dll_path):
+            QMessageBox.warning(self, "错误", "未找到DLL文件，请确认安装完整")
+            return
+
+        # 修改realmlist.wtf
+        realmlist_path = os.path.join(current_dir, 'realmlist.wtf')
         with open(realmlist_path, 'w') as f:
             if self.wow_port != "3724":
                 f.write(f"set realmlist {self.wow_ip}:{self.wow_port}\n")
             else:
                 f.write(f"set realmlist {self.wow_ip}\n")
 
-        # 启动游戏
-
-        if os.path.exists(wow_path):
-            subprocess.Popen(wow_path)
-        else:
-            QMessageBox.warning(self, "错误", "未找到游戏客户端，请确认安装路径正确")
+        try:
+            # 设置启动信息
+            startup_info = win32process.STARTUPINFO()
+            startup_info.dwFlags |= win32process.STARTF_USESHOWWINDOW
+            startup_info.wShowWindow = win32con.SW_SHOWNORMAL
+            
+            # 设置环境变量
+            env = os.environ.copy()
+            env['MPQ_DECRYPT_KEY'] = self.encryption_key
+            
+            # 创建进程(挂起状态)
+            proc_info = win32process.CreateProcess(
+                wow_path,
+                None,
+                None,
+                None,
+                False,
+                win32con.CREATE_SUSPENDED,
+                env,
+                None,
+                startup_info
+            )
+            
+            process_handle = proc_info[0]
+            thread_handle = proc_info[1]
+            
+            # 注入DLL
+            if self.inject_dll(process_handle, dll_path):
+                # 恢复进程运行
+                win32process.ResumeThread(thread_handle)
+            else:
+                # 注入失败则终止进程
+                win32process.TerminateProcess(process_handle.handle, 1)
+                raise Exception("DLL注入失败")
+                
+        except Exception as e:
+            QMessageBox.warning(self, "错误", f"启动游戏失败: {str(e)}")
+            
+            # 确保进程被终止
+            try:
+                win32process.TerminateProcess(process_handle.handle, 1)
+            except:
+                pass
+            
+        finally:
+            # 清理句柄
+            try:
+                win32api.CloseHandle(process_handle.handle)
+                win32api.CloseHandle(thread_handle)
+            except:
+                pass
 
     async def get_server_info(self):
         """获取服务器信息"""
@@ -1026,9 +1157,9 @@ class RegisterDialog(BaseServiceDialog):
         self.account_input = self._create_input("账号名称", "4-12位数字和字母")
         self.password_input = self._create_input("输入密码", "4-12位数字和字母")
         self.confirm_pwd_input = self._create_input("确认密码", "两次输入的密码")
-        self.security_pwd_input = self._create_input("安全密码", "1-8位数字和字母")
+        self.security_pwd_input = self._create_input("安全密码", "1-8位数字和字��")
         
-        # 设置验证器
+        # ���置验证器
         for input_field in [self.account_input, self.password_input, 
                           self.confirm_pwd_input, self.security_pwd_input]:
             input_field.setValidator(QRegExpValidator(QRegExp("^[a-zA-Z0-9]*$")))
