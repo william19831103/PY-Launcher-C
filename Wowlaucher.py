@@ -626,7 +626,26 @@ class WowLauncher(QMainWindow):
     def start_game(self):
         """开始游戏"""
         try:
-            # 首先检查游戏进程数量
+            # 禁用按钮并改变背景色,同时修改文本
+            original_style = self.start_btn.styleSheet()
+            original_text = self.start_btn.text()
+            self.start_btn.setEnabled(False)
+            self.start_btn.setText("游戏启动中")
+            self.start_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #808080;  /* 灰色背景 */
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    font-size: 24px;
+                    font-weight: bold;
+                }
+            """)
+            
+            # 创建定时器在2秒后恢复按钮
+            QTimer.singleShot(5000, lambda: self._restore_start_button(original_style, original_text))
+            
+            # 原有的游戏启动逻辑...
             wow_process_count = self.is_wow_running()
             
             # 1. 如果进程数量超过限制,直接返回
@@ -662,6 +681,12 @@ class WowLauncher(QMainWindow):
         except Exception as e:
             print(f"启动游戏时发生错误: {str(e)}")
             QMessageBox.warning(self, "错误", f"启动游戏失败: {str(e)}")
+            
+    def _restore_start_button(self, original_style, original_text):
+        """恢复开始游戏按钮的状态"""
+        self.start_btn.setEnabled(True)
+        self.start_btn.setStyleSheet(original_style)
+        self.start_btn.setText(original_text)
 
     def inject_dll(self, process_handle, dll_path):
         """将DLL注入到目标进程"""
