@@ -24,9 +24,17 @@ import win32event
 import win32con
 import win32api
 import win32security
+import winerror
 
 class WowLauncher(QMainWindow):
     def __init__(self):
+        # 创建互斥锁
+        self.mutex = win32event.CreateMutex(None, False, "WowLauncherMutex")
+        # 检查是否已经有实例在运行
+        if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
+            QMessageBox.warning(None, "错误", "登录器已经在运行!")
+            sys.exit(1)
+            
         super().__init__()
         
         # 1. 首先加载配置文件
@@ -867,8 +875,14 @@ class WowLauncher(QMainWindow):
         QApplication.processEvents()
 
     def closeEvent(self, event):
-        """窗口关闭时清理事件循环"""
+        """窗口关闭时清理资源"""
+        # 关闭事件循环
         self.loop.close()
+        
+        # 释放互斥锁
+        if hasattr(self, 'mutex'):
+            win32api.CloseHandle(self.mutex)
+            
         super().closeEvent(event)
 
     async def register_account(self, account, password, security_pwd):
